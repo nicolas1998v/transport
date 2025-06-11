@@ -1,0 +1,15 @@
+[Unit]
+Description=Transport Heatmap Collection Service
+After=network.target
+
+[Service]
+Type=simple
+User=nicolas
+WorkingDirectory=/home/nicolas/transport/heatmap/deploy
+Environment=GOOGLE_APPLICATION_CREDENTIALS=/home/nicolas/transport/heatmap/deploy/credentials.json
+ExecStart=/home/nicolas/transport/heatmap/deploy/venv/bin/python3.9 /home/nicolas/transport/heatmap/deploy/run_heatmap.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target 

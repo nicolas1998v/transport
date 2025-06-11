@@ -1,0 +1,8 @@
+functions-framework==3.*
+google-cloud-storage
+google-cloud-error-reporting
+pandas
+requests
+numpy
+scikit-learn
+python-dotenv==1.0.0
