@@ -1,0 +1,81 @@
+
+  . /Users/nicolas/opt/anaconda3/bin/activate && conda activate /Users/nicolas/opt/anaconda3/envs/pyspark_env;
+   
+   SELECT 
+    train_id,
+    initial_prediction_timestamp,
+    arrival_timestamp,
+    COUNT(*) as duplicate_count
+FROM `nico-playground-384514.transport_predictions.initial_errors`
+GROUP BY 
+    train_id,
+    initial_prediction_timestamp,
+    arrival_timestamp
+HAVING COUNT(*) > 1
+ORDER BY duplicate_count DESC
+
+SELECT 
+    train_id,
+    initial_prediction_timestamp,
+    arrival_timestamp,
+    COUNT(*) as duplicate_count
+FROM `nico-playground-384514.transport_predictions.initial_errors`
+GROUP BY 
+    train_id,
+    initial_prediction_timestamp,
+    arrival_timestamp
+HAVING COUNT(*) > 1
+ORDER BY duplicate_count DESC
+
+SELECT 
+    train_id,
+    any_prediction_timestamp,
+    timestamp
+    arrival_timestamp,
+    COUNT(*) as duplicate_count
+FROM `nico-playground-384514.transport_predictions.any_errors`
+GROUP BY 
+    train_id,
+    any_prediction_timestamp,
+    timestamp
+    arrival_timestamp
+HAVING COUNT(*) > 1
+ORDER BY duplicate_count DESC
+
+
+
+            
+            # Check for King's Cross arrivals
+            if time_to_station < 20 and 'King' in current_location:
+                train_key = train_id
+
+                print('previous obsv:',previous_observations)
+                print('blocked_trains:', blocked_trains)
+                
+                # Check if this train was previously blocked
+                if train_key in previous_observations:
+                    prev_data = previous_observations[train_key]
+                    print(f"\nDEBUG - Checking blocked train:")
+                    print(f"Train: {train_key}")
+                    print(f"Time to station: {time_to_station}")
+                    print(f"Location: {current_location}")
+                    
+                    time_since_last_seen = (current_time - prev_data['timestamp']).total_seconds()
+                    print(f"Time since last seen: {time_since_last_seen} seconds")
+                    
+                    if time_since_last_seen > 65:
+                        print(f"Train hasn't been seen in over a minute, marking as arrived")
+                        arrival_timestamp = prev_data['timestamp']
+                        any_prediction_timestamp = None
+                        if train_key in blocked_trains:
+                            del blocked_trains[train_key]
+                        
+                else:
+                    # Add new observation
+                    blocked_trains[train_key] = {
+                        'timestamp': current_time,
+                        'time_to_station': time_to_station,
+                        'location': current_location
+                    }
+
+

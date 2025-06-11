@@ -1,0 +1,15 @@
+[Unit]
+Description=Transport Prediction Service
+After=network.target
+
+[Service]
+Type=simple
+User=nicolas
+WorkingDirectory=/home/nicolas/transport/prediction/cloud_functions
+Environment=GOOGLE_APPLICATION_CREDENTIALS=/home/nicolas/transport/prediction/cloud_functions/credentials.json
+ExecStart=/home/nicolas/transport/prediction/cloud_functions/venv/bin/python /home/nicolas/transport/prediction/cloud_functions/run_predictions.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target 

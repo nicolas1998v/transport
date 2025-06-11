@@ -1,0 +1,17 @@
+
+Postcodes that failed multiple times:
+Failed 5/5 times:
+  None-type: 138 postcodes
+  Filtered London: 199 postcodes
+Failed 4/5 times:
+  None-type: 32 postcodes
+  Filtered London: 193 postcodes
+Failed 3/5 times:
+  None-type: 66 postcodes
+  Filtered London: 106 postcodes
+Failed 2/5 times:
+  None-type: 78 postcodes
+  Filtered London: 40 postcodes
+Failed 1/5 times:
+  None-type: 243 postcodes
+  Filtered London: 98 postcodes

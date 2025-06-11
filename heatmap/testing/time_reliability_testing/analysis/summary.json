@@ -1,0 +1,9 @@
+{
+  "total_runs": 28,
+  "total_postcodes": 7406,
+  "always_works": 1868,
+  "usually_works": 1312,
+  "sometimes_works": 256,
+  "rarely_works": 61,
+  "never_works": 3909
+}
