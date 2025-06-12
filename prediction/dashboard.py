@@ -8,18 +8,20 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 
-local_credentials = Path(
-            '/Users/nicolas/credentials.json')
-            
-if not local_credentials:
-         
-         credentials =service_account.Credentials.from_service_account_info(
-            st.secrets["gcp_service_account"]
-         )
-         client = bigquery.Client(credentials=credentials, project=credentials.project_id)
-         storage_client = storage.Client(credentials=credentials)
-         bucket = storage_client.bucket('london-transport-data')
-
+# Initialize GCP client with credentials from Streamlit secrets
+try:
+    credentials = service_account.Credentials.from_service_account_info(
+        st.secrets["gcp_service_account"]
+    )
+    client = bigquery.Client(credentials=credentials, project=credentials.project_id)
+    
+except Exception as e:
+    st.error("""
+    ⚠️ Error initializing Google Cloud client. Please check your credentials in Streamlit Cloud secrets.
+    Make sure you've added the credentials in the correct TOML format.
+    """)
+    st.error(str(e))
+    st.stop()
 
 
 # Set page config
