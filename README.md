@@ -152,8 +152,7 @@ For both projects you would need to set a micro-VM for each and copy the service
 Also you would need to have a service account with 
 - BigQuery Admin
 - Compute Instance Admin (v1)
-- Storage Object Creater
-- Storage Object Viewer roles. And retrieve a key and place it in the VM.
+- Storage Admin roles. And retrieve a key and place it in the VM.
 
 You would need to retrieve many keys from the Transport for London API (by creating many accounts).
 For the heatmap you would need to filter the data to get valid postcodes.  
