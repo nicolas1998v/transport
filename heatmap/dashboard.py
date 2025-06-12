@@ -3,6 +3,7 @@ import pandas as pd
 import folium
 from streamlit_folium import folium_static
 from google.cloud import storage
+from google.oauth2 import service_account
 import json
 from datetime import datetime, timedelta
 import branca.colormap as cm
@@ -10,9 +11,20 @@ import io
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
 
-# Initialize GCP client
-storage_client = storage.Client()
-bucket = storage_client.bucket('london-transport-data')
+# Initialize GCP client with credentials from Streamlit secrets
+try:
+    credentials = service_account.Credentials.from_service_account_info(
+        st.secrets["gcp_service_account"]
+    )
+    storage_client = storage.Client(credentials=credentials)
+    bucket = storage_client.bucket('london-transport-data')
+except Exception as e:
+    st.error("""
+    ⚠️ Error initializing Google Cloud client. Please check your credentials in Streamlit Cloud secrets.
+    Make sure you've added the credentials in the correct TOML format.
+    """)
+    st.error(str(e))
+    st.stop()
 
 def create_map(data):
     """Create a map with color-coded points"""
