@@ -6,40 +6,32 @@ from google.oauth2 import service_account
 import plotly.express as px
 from datetime import datetime, timedelta
 import plotly.graph_objects as go
-import os
-from pathlib import Path
 from dotenv import load_dotenv
 
-# Load environment variables (only affects local development)
-load_dotenv()
-
-# Initialize GCP client with credentials from Streamlit secrets or local credentials
+# Initialize Google Cloud client
 try:
-    # Streamlit Cloud automatically sets this environment variable
-    if os.getenv('STREAMLIT_CLOUD') == 'true':
-        # Streamlit Cloud
-        credentials = service_account.Credentials.from_service_account_info(
-            st.secrets["gcp_service_account"]
-        )
-    else:
-        # Local development
-        credentials_path = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
-        if not credentials_path:
-            raise ValueError("GOOGLE_APPLICATION_CREDENTIALS not found in .env file")
-        credentials = service_account.Credentials.from_service_account_file(
-            credentials_path
-        )
+    credentials = service_account.Credentials.from_service_account_file(
+            '/Users/nicolas/credentials.json')
     
-    client = bigquery.Client(credentials=credentials, project=credentials.project_id)
-    storage_client = storage.Client(credentials=credentials)
-    bucket = storage_client.bucket('london-transport-data')
+    # Check if we're running on Streamlit Cloud by checking for secrets
+    if credentials:
+        # Use Streamlit secrets for cloud deployment
+        client = bigquery.Client(credentials=credentials, project=credentials.project_id)
+        
+    else:
+         client = bigquery.Client.from_service_account_info(
+            st.secrets["gcp_service_account"]
+         )
 except Exception as e:
-    st.error("""
-    ⚠️ Error initializing Google Cloud client. Please check your credentials.
-    For local development, ensure GOOGLE_APPLICATION_CREDENTIALS is set in .env file
-    For Streamlit Cloud, ensure credentials are added in the secrets management section.
+    st.error(f"""
+    ⚠️ Error initializing Google Cloud client: {str(e)}
+    
+    For local development:
+    - Ensure credentials.json exists at /Users/nicolas/credentials.json
+    
+    For Streamlit Cloud:
+    - Add your service account credentials in the Streamlit secrets management
     """)
-    st.error(str(e))
     st.stop()
 
 # Set page config
