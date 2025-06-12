@@ -8,13 +8,17 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 
-credentials = Path(
+local_credentials = Path(
             '/Users/nicolas/credentials.json')
             
-if not credentials:
-         client = bigquery.Client.from_service_account_info(
+if not local_credentials:
+         
+         crendentials =service_account.Credentials.from_service_account_info(
             st.secrets["gcp_service_account"]
          )
+         client = bigquery.Client(credentials=crendentials, project=crendentials.project_id)
+
+
 
 # Set page config
 st.set_page_config(page_title="Kings Cross Tube Prediction Analysis", layout="wide")
