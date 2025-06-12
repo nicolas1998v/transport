@@ -168,3 +168,4 @@ The events and weather data collection is done through Cloud Functions as its si
 - TicketMaster API for event data
 - London postcode data sourced from doogal.co.uk.
 - Google Cloud VM, systemd,and Cloud Scheduler for robust, cost-effective deployment.
+- My brother Juan Pablo for proving me guidance throughout this past year.
