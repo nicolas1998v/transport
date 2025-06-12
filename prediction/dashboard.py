@@ -1,9 +1,10 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
+from google.cloud import bigquery
 from google.cloud import storage
 from google.oauth2 import service_account
-from datetime import datetime
+import plotly.express as px
+from datetime import datetime, timedelta
 import plotly.graph_objects as go
 
 # Initialize GCP client with credentials from Streamlit secrets
@@ -11,6 +12,7 @@ try:
     credentials = service_account.Credentials.from_service_account_info(
         st.secrets["gcp_service_account"]
     )
+    client = bigquery.Client(credentials=credentials, project=credentials.project_id)
     storage_client = storage.Client(credentials=credentials)
     bucket = storage_client.bucket('london-transport-data')
 except Exception as e:
