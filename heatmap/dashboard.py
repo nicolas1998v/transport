@@ -10,6 +10,7 @@ import branca.colormap as cm
 import io
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
+import pytz
 
 # Initialize GCP client with credentials from Streamlit secrets
 try:
@@ -180,7 +181,9 @@ st.caption('Journey times from SW1A 2JR to all London postcodes')
 # Update the timestamp display
 results = load_latest_results()
 if results:
-    current_time = datetime.now()
+    # Get current time in London timezone
+    london_tz = pytz.timezone('Europe/London')
+    current_time = datetime.now(london_tz)
     last_update = current_time
     next_update = current_time.replace(minute=0) + pd.Timedelta(hours=1)
     minutes_until_update = int((next_update - current_time).total_seconds() / 60)
