@@ -42,8 +42,8 @@ SELECT
     (SELECT COUNT(*) FROM `nico-playground-384514.transport_predictions.initial_errors`) +
     (SELECT COUNT(*) FROM `nico-playground-384514.transport_predictions.any_errors`) as total_count
 """
-count_job = run_query(count_query)
-total_count = next(count_job.result()).total_count
+count_df = run_query(count_query)
+total_count = count_df['total_count'].iloc[0]
 
 # Display refresh info and counts
 last_refresh = st.session_state.last_refresh_time.strftime("%Y-%m-%d %H:%M:%S")
