@@ -258,27 +258,23 @@ def run_forever():
             # Get current time and add 1 hour for BST
             now = datetime.now() + timedelta(hours=1)
             
-            # If we're in the first 30 minutes of the hour
-            if now.minute < 30:
-                logger.info("Running batch 1")
-                main(1)
-                
-                # Wait until 30 minutes past the hour
-                wait_until = now.replace(minute=30, second=0, microsecond=0)
-                wait_seconds = (wait_until - now).total_seconds()
-                logger.info(f"Waiting {wait_seconds:.0f} seconds until 30 minutes past the hour")
-                time.sleep(wait_seconds)
-            
-            # If we're in the second 30 minutes of the hour
-            else:
-                logger.info("Running batch 2")
-                main(2)
-                
-                # Wait until the next hour
+            # Calculate time until next run (either XX:00 or XX:30)
+            if now.minute >= 30:
+                # Next run is at XX:00
                 wait_until = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
-                wait_seconds = (wait_until - now).total_seconds()
-                logger.info(f"Waiting {wait_seconds:.0f} seconds until next hour")
-                time.sleep(wait_seconds)
+                batch = 1
+            else:
+                # Next run is at XX:30
+                wait_until = now.replace(minute=30, second=0, microsecond=0)
+                batch = 2
+            
+            wait_seconds = (wait_until - now).total_seconds()
+            logger.info(f"Waiting {wait_seconds:.0f} seconds until next run at {wait_until.strftime('%H:%M')} (batch {batch})")
+            time.sleep(wait_seconds)
+            
+            # Run the batch
+            logger.info(f"Running batch {batch}")
+            main(batch)
             
         except Exception as e:
             logger.error(f"Error in run_forever: {str(e)}")
