@@ -13,10 +13,12 @@ local_credentials = Path(
             
 if not local_credentials:
          
-         crendentials =service_account.Credentials.from_service_account_info(
+         credentials =service_account.Credentials.from_service_account_info(
             st.secrets["gcp_service_account"]
          )
-         client = bigquery.Client(credentials=crendentials, project=crendentials.project_id)
+         client = bigquery.Client(credentials=credentials, project=credentials.project_id)
+         storage_client = storage.Client(credentials=credentials)
+         bucket = storage_client.bucket('london-transport-data')
 
 
 
