@@ -5,8 +5,20 @@ import plotly.express as px
 from datetime import datetime, timedelta
 import plotly.graph_objects as go
 
-# Initialize BigQuery client
-client = bigquery.Client()
+# Initialize GCP client with credentials from Streamlit secrets
+try:
+    credentials = service_account.Credentials.from_service_account_info(
+        st.secrets["gcp_service_account"]
+    )
+    storage_client = storage.Client(credentials=credentials)
+    bucket = storage_client.bucket('london-transport-data')
+except Exception as e:
+    st.error("""
+    ⚠️ Error initializing Google Cloud client. Please check your credentials in Streamlit Cloud secrets.
+    Make sure you've added the credentials in the correct TOML format.
+    """)
+    st.error(str(e))
+    st.stop()
 
 # Set page config
 st.set_page_config(page_title="Kings Cross Tube Prediction Analysis", layout="wide")
