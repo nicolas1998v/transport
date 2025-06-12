@@ -10,3 +10,4 @@ folium==0.15.1
 streamlit-folium==0.15.1
 scikit-learn>=1.4.0
 branca>=0.6.0 
+python-dotenv>=1.0.1

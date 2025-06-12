@@ -6,19 +6,38 @@ from google.oauth2 import service_account
 import plotly.express as px
 from datetime import datetime, timedelta
 import plotly.graph_objects as go
+import os
+from pathlib import Path
+from dotenv import load_dotenv
 
-# Initialize GCP client with credentials from Streamlit secrets
+# Load environment variables (only affects local development)
+load_dotenv()
+
+# Initialize GCP client with credentials from Streamlit secrets or local credentials
 try:
-    credentials = service_account.Credentials.from_service_account_info(
-        st.secrets["gcp_service_account"]
-    )
+    # Streamlit Cloud automatically sets this environment variable
+    if os.getenv('STREAMLIT_CLOUD') == 'true':
+        # Streamlit Cloud
+        credentials = service_account.Credentials.from_service_account_info(
+            st.secrets["gcp_service_account"]
+        )
+    else:
+        # Local development
+        credentials_path = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
+        if not credentials_path:
+            raise ValueError("GOOGLE_APPLICATION_CREDENTIALS not found in .env file")
+        credentials = service_account.Credentials.from_service_account_file(
+            credentials_path
+        )
+    
     client = bigquery.Client(credentials=credentials, project=credentials.project_id)
     storage_client = storage.Client(credentials=credentials)
     bucket = storage_client.bucket('london-transport-data')
 except Exception as e:
     st.error("""
-    ⚠️ Error initializing Google Cloud client. Please check your credentials in Streamlit Cloud secrets.
-    Make sure you've added the credentials in the correct TOML format.
+    ⚠️ Error initializing Google Cloud client. Please check your credentials.
+    For local development, ensure GOOGLE_APPLICATION_CREDENTIALS is set in .env file
+    For Streamlit Cloud, ensure credentials are added in the secrets management section.
     """)
     st.error(str(e))
     st.stop()
@@ -287,24 +306,24 @@ with tab1:
     
     st.markdown("""
                 
-     Welcome to my dashboard! In the year 2025 I've challenged myself to retrieve some insights from the publically available Transport for London API. Please go through the several tabs at your disposition.
+     Welcome to my dashboard! In the year 2025 I've challenged myself to retrieve some insights from the publically available Transport for London API.
     The data is fetched every 30 seconds, so every 30 seconds numerous predictions are made. The data is then stored in a BigQuery tables that power this dashboard. The tube lines in question are those disserving King's Cross: Victoria, Northern, Hammersmith & City, Metropolitan and Piccadilly. Circle line is excluded due to data quality issues.
     
     This first tab shows the correlation matrix between the predictions and time to station, divided by direction - inbound or outbound.   
     If a dot has a negative error, it means the train was predicted to be earlier than it actually was (so the train is late with respect to the prediction).      
     If a dot has a positive error, it means the train was predicted to be later than it actually was (so the train is early with respect to the prediction).         
                            
-    As you will see in the distance tab, distance and accuracy, or accurate predictions within 30s or 60s, follow an upwards trend.  
-    The correlations underneath show that time to station and error don't follow the same pattern. Be warned ! The error takes into account the sign of the error (lateness or earlyness with respect to the prediction). That is why I have also included in this analysis the effect of the absolute error on computations and correlations to understand magnitude only.
+    As you will see in the distance tab, the further away you predict, the less accurate the prediction is.
+    The first correlations underneath show that time to station and error don't follow the same pattern. Be warned ! The error takes into account the sign of the error (lateness or earlyness with respect to the prediction). That is why I have also included in this analysis the effect of the absolute error on computations and correlations to understand magnitude only.
     
     For the normal correlation:   
     If a correlation/trendline is positive, it means that further away, the train tends to overestimate the journey, and trains mostly arrive earlier than what they first predicted.  Further away, the algorithm recalibrates the prediction.   
-    If a correlation/trendline is negative, it means that further away, the train tends to underestimate the journey, and trains mostly arrive later than what they first predicted. Similarly, further away the algorithm recalibrates (although directions with high average errors show quite instability).
-    If a correlation is close to 0, it means that the algorithm doesn't recalibrate succesfully in the mid range sections (could hint to an unstable service or a faulty algorithm).
+    If a correlation/trendline is negative, it means that further away, the train tends to underestimate the journey, and trains mostly arrive later than what they first predicted. Similarly, further away the algorithm recalibrates (although directions with high average errors depict instability).
+    If a correlation is close to 0, it means that the service is quite stable, as even futher away the error doesn't have much variance.
                 
     For the absolute correlation, it gives expected results. The further away you predict, the more the absolute error is correlated with the time to station.
     
-    You can isolate the data by clicking on the line you want to see, or zoom in on the scatter plot to see more details. You can also select a single train and isolate a few runs to better understand how Transport for London makes its predictions.
+    You can isolate the data by clicking on the line you want to see, and zoom in on the scatter plot by dragging the mouse to see more details. You can also select a single train and isolate a few runs to better understand how Transport for London makes its predictions.
     """)
     # Add metric for predictions within 30 seconds and 1 minute
     accuracy_query = """
@@ -593,7 +612,8 @@ with tab1:
         st.plotly_chart(fig_inbound, use_container_width=True)
         st.markdown("---")  # Add a separator between inbound  sections
                 # Basic statistics
-        st.subheader("Inbound Statistics - 3000 observations per line")
+        st.subheader("Inbound Statistics")
+        st.write("3000 observations per line")
         # Sample 3000 predictions per line
         sampled_data_inbound = inbound_data.groupby('line').apply(lambda x: x.sample(n=min(3000, len(x)), random_state=42)).reset_index(drop=True)
         col1, col2, col3 = st.columns(3)
@@ -607,7 +627,6 @@ with tab1:
                 st.metric("Overall Correlation (abs)", f"{sampled_data_inbound['error_seconds'].abs().corr(sampled_data_inbound['time_to_station']):.2f}")
 
                     # Line-specific correlation analysis
-        st.subheader("Line-Specific Analysis - all observations per line")
         line_correlations = []
         line_correlations_abs = []
         for line in inbound_data['line'].unique():
@@ -642,43 +661,43 @@ with tab1:
                 'error_rate_per_minute_abs': error_rate_per_minute_abs
             })
 
-            # Sort both lists by absolute correlation
-            line_correlations.sort(key=lambda x: abs(x['correlation']), reverse=True)
-            line_correlations_abs.sort(key=lambda x: abs(x['correlation_abs']), reverse=True)
+        # Sort both lists by absolute correlation
+        line_correlations.sort(key=lambda x: abs(x['correlation']), reverse=True)
+        line_correlations_abs.sort(key=lambda x: abs(x['correlation_abs']), reverse=True)
 
-    # Display line-specific insights
-        
-        for i, (line_data, line_data_abs) in enumerate(zip(line_correlations, line_correlations_abs)):
+        # Display line-specific insights
+        st.subheader("Correlation Analysis")
+        for line_data in line_correlations:
             correlation = line_data['correlation']
-            correlation_abs = line_data_abs['correlation_abs']
             line = line_data['line']
             avg_error = line_data['avg_error']
-            avg_error_abs = line_data_abs['avg_error_abs']
             avg_time = line_data['avg_time']
             error_rate = line_data['error_rate_per_minute']
-            error_rate_abs = line_data_abs['error_rate_per_minute_abs']
-        
-        # First sentence (regular correlation)
+            
             if abs(correlation) > 0.5:
                 strength = "strong" if abs(correlation) > 0.7 else "moderate"
                 direction = "positive" if correlation > 0 else "negative"
-                first_sentence = f"• {line.title()} line shows a {strength} {direction} correlation of {correlation:.2f} as per seen on the trendline. For every minute increase in time to station, prediction errors {'increase' if correlation > 0 else 'decrease'} by {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s, average time to station: {avg_time:.0f}s."
+                st.write(f"• {line.title()} line shows a {strength} {direction} correlation of {correlation:.2f}. For every minute increase in time to station, prediction errors {'increase' if correlation > 0 else 'decrease'} by {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s, average time to station: {avg_time:.0f}s.")
             elif abs(correlation) > 0.3:
-                first_sentence = f"• {line.title()} line shows a weak correlation of {correlation:.2f} as per seen on the trendline. For every minute increase in time to station, prediction errors {'increase' if correlation > 0 else 'decrease'} by {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s, average time to station: {avg_time:.0f}s."
+                st.write(f"• {line.title()} line shows a weak correlation of {correlation:.2f}. For every minute increase in time to station, prediction errors {'increase' if correlation > 0 else 'decrease'} by {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s, average time to station: {avg_time:.0f}s.")
             else:
-                first_sentence = f"• {line.title()} line shows minimal correlation of {correlation:.2f} as per seen on the trendline. For every minute increase in time to station, prediction errors {'increase' if correlation > 0 else 'decrease'} by {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s, average time to station: {avg_time:.0f}s."
+                st.write(f"• {line.title()} line shows minimal correlation of {correlation:.2f}. For every minute increase in time to station, prediction errors {'increase' if correlation > 0 else 'decrease'} by {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s, average time to station: {avg_time:.0f}s.")
+        
+        st.subheader("Absolute Correlation Analysis - Error Magnitude")
+        for line_data_abs in line_correlations_abs:
+            correlation_abs = line_data_abs['correlation_abs']
+            line = line_data_abs['line']
+            avg_error_abs = line_data_abs['avg_error_abs']
+            error_rate_abs = line_data_abs['error_rate_per_minute_abs']
             
-            # Second sentence (absolute correlation)
             if abs(correlation_abs) > 0.5:
                 strength_abs = "strong" if abs(correlation_abs) > 0.7 else "moderate"
                 direction_abs = "positive" if correlation_abs > 0 else "negative"
-                second_sentence = f"If you take into account only the magnitude of the prediction error, then {line.title()} shows a {strength_abs} {direction_abs} correlation of {correlation_abs:.2f}. For every minute increase in time to station, absolute prediction errors {'increase' if correlation_abs > 0 else 'decrease'} by {abs(error_rate_abs):.1f} seconds. Absolute average error: {avg_error_abs:.0f}s"
+                st.write(f"•  {line.title()} line shows a {strength_abs} {direction_abs} correlation of {correlation_abs:.2f}. For every minute increase in time to station, absolute prediction errors {'increase' if correlation_abs > 0 else 'decrease'} by {abs(error_rate_abs):.1f} seconds. Absolute average error: {avg_error_abs:.0f}s.")
             elif abs(correlation_abs) > 0.3:
-                second_sentence = f"If you take into account only the magnitude of the prediction error, then {line.title()} shows a weak correlation of {correlation_abs:.2f}. For every minute increase in time to station, absolute prediction errors {'increase' if correlation_abs > 0 else 'decrease'} by {abs(error_rate_abs):.1f} seconds.Absolute average error: {avg_error_abs:.0f}s"
+                st.write(f"• {line.title()} line shows a weak correlation of {correlation_abs:.2f}. For every minute increase in time to station, absolute prediction errors {'increase' if correlation_abs > 0 else 'decrease'} by {abs(error_rate_abs):.1f} seconds. Absolute average error: {avg_error_abs:.0f}s.")
             else:
-                second_sentence = f"If you take into account only the magnitude of the prediction error, then {line.title()} shows minimal correlation of {correlation_abs:.2f}. For every minute increase in time to station, absolute prediction errors {'increase' if correlation_abs > 0 else 'decrease'} by {abs(error_rate_abs):.1f} seconds. Absolute average error: {avg_error_abs:.0f}s"
-        
-            st.write(first_sentence,second_sentence)
+                st.write(f"• {line.title()} line shows minimal correlation of {correlation_abs:.2f}. For every minute increase in time to station, absolute prediction errors {'increase' if correlation_abs > 0 else 'decrease'} by {abs(error_rate_abs):.1f} seconds. Absolute average error: {avg_error_abs:.0f}s.")
 
         st.markdown("---")  # Add a separator between inbound and outbound sections
             # Outbound predictions
@@ -690,7 +709,8 @@ with tab1:
 
 
                     # Basic statistics
-        st.subheader("Outbound Statistics - 3000 observations per line")
+        st.subheader("Outbound Statistics")
+        st.write("3000 observations per line")
             # Sample 3000 predictions per line
         sampled_data_outbound = outbound_data.groupby('line').apply(lambda x: x.sample(n=min(3000, len(x)), random_state=42)).reset_index(drop=True)
         col1, col2, col3 = st.columns(3)
@@ -703,7 +723,6 @@ with tab1:
                 st.metric("Overall Correlation", f"{sampled_data_outbound['error_seconds'].corr(sampled_data_outbound['time_to_station']):.2f}")
                 st.metric("Overall Correlation (abs)", f"{sampled_data_outbound['error_seconds'].abs().corr(sampled_data_outbound['time_to_station']):.2f}")
 
-        st.subheader("Line-Specific Analysis - all observations per line")
         line_correlations = []
         line_correlations_abs = []
         for line in outbound_data['line'].unique():
@@ -743,38 +762,38 @@ with tab1:
         line_correlations_abs.sort(key=lambda x: abs(x['correlation_abs']), reverse=True)
 
         # Display line-specific insights
-        
-        for i, (line_data, line_data_abs) in enumerate(zip(line_correlations, line_correlations_abs)):
+        st.subheader("Correlation Analysis")
+        for line_data in line_correlations:
             correlation = line_data['correlation']
-            correlation_abs = line_data_abs['correlation_abs']
             line = line_data['line']
             avg_error = line_data['avg_error']
-            avg_error_abs = line_data_abs['avg_error_abs']
             avg_time = line_data['avg_time']
             error_rate = line_data['error_rate_per_minute']
-            error_rate_abs = line_data_abs['error_rate_per_minute_abs']
             
-            # First sentence (regular correlation)
             if abs(correlation) > 0.5:
                 strength = "strong" if abs(correlation) > 0.7 else "moderate"
                 direction = "positive" if correlation > 0 else "negative"
-                first_sentence = f"• {line.title()} line shows a {strength} {direction} correlation of {correlation:.2f} as per seen on the trendline. For every minute increase in time to station, prediction errors {'increase' if correlation > 0 else 'decrease'} by {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s, average time to station: {avg_time:.0f}s."
+                st.write(f"• {line.title()} line shows a {strength} {direction} correlation of {correlation:.2f}. For every minute increase in time to station, prediction errors {'increase' if correlation > 0 else 'decrease'} by {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s, average time to station: {avg_time:.0f}s.")
             elif abs(correlation) > 0.3:
-                first_sentence = f"• {line.title()} line shows a weak correlation of {correlation:.2f} as per seen on the trendline. For every minute increase in time to station, prediction errors {'increase' if correlation > 0 else 'decrease'} by {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s, average time to station: {avg_time:.0f}s."
+                st.write(f"• {line.title()} line shows a weak correlation of {correlation:.2f}. For every minute increase in time to station, prediction errors {'increase' if correlation > 0 else 'decrease'} by {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s, average time to station: {avg_time:.0f}s.")
             else:
-                first_sentence = f"• {line.title()} line shows minimal correlation of {correlation:.2f} as per seen on the trendline. For every minute increase in time to station, prediction errors {'increase' if correlation > 0 else 'decrease'} by {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s, average time to station: {avg_time:.0f}s."
+                st.write(f"• {line.title()} line shows minimal correlation of {correlation:.2f}. For every minute increase in time to station, prediction errors {'increase' if correlation > 0 else 'decrease'} by {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s, average time to station: {avg_time:.0f}s.")
+        
+        st.subheader("Absolute Correlation Analysis - Error Magnitude")
+        for line_data_abs in line_correlations_abs:
+            correlation_abs = line_data_abs['correlation_abs']
+            line = line_data_abs['line']
+            avg_error_abs = line_data_abs['avg_error_abs']
+            error_rate_abs = line_data_abs['error_rate_per_minute_abs']
             
-            # Second sentence (absolute correlation)
             if abs(correlation_abs) > 0.5:
                 strength_abs = "strong" if abs(correlation_abs) > 0.7 else "moderate"
                 direction_abs = "positive" if correlation_abs > 0 else "negative"
-                second_sentence = f"If you take into account only the magnitude of the prediction error, then {line.title()} shows a {strength_abs} {direction_abs} correlation of {correlation_abs:.2f}. For every minute increase in time to station, absolute prediction errors {'increase' if correlation_abs > 0 else 'decrease'} by {abs(error_rate_abs):.1f} seconds. Absolute average error: {avg_error_abs:.0f}s."
+                st.write(f"•  {line.title()} line shows a {strength_abs} {direction_abs} correlation of {correlation_abs:.2f}. For every minute increase in time to station, absolute prediction errors {'increase' if correlation_abs > 0 else 'decrease'} by {abs(error_rate_abs):.1f} seconds. Absolute average error: {avg_error_abs:.0f}s.")
             elif abs(correlation_abs) > 0.3:
-                second_sentence = f"If you take into account only the magnitude of the prediction error, then {line.title()} shows a weak correlation of {correlation_abs:.2f}. For every minute increase in time to station, absolute prediction errors {'increase' if correlation_abs > 0 else 'decrease'} by {abs(error_rate_abs):.1f} seconds. Absolute average error: {avg_error_abs:.0f}s."
+                st.write(f"• {line.title()} line shows a weak correlation of {correlation_abs:.2f}. For every minute increase in time to station, absolute prediction errors {'increase' if correlation_abs > 0 else 'decrease'} by {abs(error_rate_abs):.1f} seconds. Absolute average error: {avg_error_abs:.0f}s.")
             else:
-                second_sentence = f"If you take into account only the magnitude of the prediction error, then {line.title()} shows minimal correlation of {correlation_abs:.2f}. For every minute increase in time to station, absolute prediction errors {'increase' if correlation_abs > 0 else 'decrease'} by {abs(error_rate_abs):.1f} seconds. Absolute average error: {avg_error_abs:.0f}s."
-            
-            st.write(first_sentence,second_sentence)
+                st.write(f"• {line.title()} line shows minimal correlation of {correlation_abs:.2f}. For every minute increase in time to station, absolute prediction errors {'increase' if correlation_abs > 0 else 'decrease'} by {abs(error_rate_abs):.1f} seconds. Absolute average error: {avg_error_abs:.0f}s.")
     else:
         st.plotly_chart(fig, use_container_width=True)
             
@@ -784,13 +803,14 @@ with tab1:
 with tab2:
     
     st.markdown("""
-    This second tab shows the correlation matrix between initial prediction and time to station, divided by direction - inbound or outbound.  
-    The initial prediction is the first prediction of a train when first arriving in the dataset, at least 20 minutes after that said train was last seen (as trains eventually come back into the radar). So the predictions in the last tab where all of those after these ones.
+    This second tab shows the correlation matrix between the initial prediction and time to station, divided by direction - inbound or outbound.  
+    The initial prediction is the first prediction of a train when first arriving in the dataset, at least 20 minutes after that said train was last seen (as trains eventually come back into the radar).  
+    As such, the predictions in the last tab where all of those after these ones.
                 
-    Interestingly, the correlations here come with a different ranking than those in the first tab.  
-    For some lines, it seems that when they first predict early and the prediction is late compared to arrival, the recalibration is smoother and more succesful than when they first predict later on and that prediction is early compared to arrival.
+    Interestingly, the correlations here come with a different ranking than those in the first tab.
+                  
+    After analysing both tabs, it seems that when lines first predict early and with some buffer time, the recalibration is smoother and more succesful than when they first predict later on. It seems that it is that extra few minutes in betwen initial predictions that grant predicitons extra leg room.
                 
-    As a rule of thumb, absolute average error is a measure of a lines stability and trains that predicted early to begin with are easier to predict than trains that predicted late to begin with.
     """)
     
     # Add metrics for predictions within 30 seconds and 1 minute
@@ -889,7 +909,8 @@ with tab2:
             st.plotly_chart(fig_inbound, use_container_width=True)
         
         # Basic statistics
-        st.subheader("Inbound Statistics - 300 observations per line")
+        st.subheader("Inbound Statistics")
+        st.write("3000 observations per line")
         
         # Sample 1000 predictions per line
         sampled_data_inbound = inbound_data.groupby('line').apply(lambda x: x.sample(n=min(300, len(x)), random_state=42)).reset_index(drop=True)
@@ -904,7 +925,6 @@ with tab2:
                 st.metric("Overall Correlation (abs)", f"{sampled_data_inbound['error_seconds'].abs().corr(sampled_data_inbound['time_to_station']):.2f}")
 
                     # Line-specific correlation analysis
-        st.subheader("Line-Specific Analysis - all observations per line")
         line_correlations = []
         line_correlations_abs = []
         for line in inbound_data['line'].unique():
@@ -945,37 +965,39 @@ with tab2:
 
     # Display line-specific insights
         
-        for i, (line_data, line_data_abs) in enumerate(zip(line_correlations, line_correlations_abs)):
+        # Display line-specific insights
+        st.subheader("Correlation Analysis")
+        for line_data in line_correlations:
             correlation = line_data['correlation']
-            correlation_abs = line_data_abs['correlation_abs']
             line = line_data['line']
             avg_error = line_data['avg_error']
-            avg_error_abs = line_data_abs['avg_error_abs']
             avg_time = line_data['avg_time']
             error_rate = line_data['error_rate_per_minute']
-            error_rate_abs = line_data_abs['error_rate_per_minute_abs']
-        
-        # First sentence (regular correlation)
+            
             if abs(correlation) > 0.5:
                 strength = "strong" if abs(correlation) > 0.7 else "moderate"
                 direction = "positive" if correlation > 0 else "negative"
-                first_sentence = f"• {line.title()} line shows a {strength} {direction} correlation of {correlation:.2f} as per seen on the trendline. For every minute increase in time to station, prediction errors {'increase' if correlation > 0 else 'decrease'} by {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s, average time to station: {avg_time:.0f}s."
+                st.write(f"• {line.title()} line shows a {strength} {direction} correlation of {correlation:.2f}. For every minute increase in time to station, prediction errors {'increase' if correlation > 0 else 'decrease'} by {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s, average time to station: {avg_time:.0f}s.")
             elif abs(correlation) > 0.3:
-                first_sentence = f"• {line.title()} line shows a weak correlation of {correlation:.2f} as per seen on the trendline. For every minute increase in time to station, prediction errors {'increase' if correlation > 0 else 'decrease'} by {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s, average time to station: {avg_time:.0f}s."
+                st.write(f"• {line.title()} line shows a weak correlation of {correlation:.2f}. For every minute increase in time to station, prediction errors {'increase' if correlation > 0 else 'decrease'} by {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s, average time to station: {avg_time:.0f}s.")
             else:
-                first_sentence = f"• {line.title()} line shows minimal correlation of {correlation:.2f} as per seen on the trendline. For every minute increase in time to station, prediction errors {'increase' if correlation > 0 else 'decrease'} by {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s, average time to station: {avg_time:.0f}s."
+                st.write(f"• {line.title()} line shows minimal correlation of {correlation:.2f}. For every minute increase in time to station, prediction errors {'increase' if correlation > 0 else 'decrease'} by {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s, average time to station: {avg_time:.0f}s.")
+        
+        st.subheader("Absolute Correlation Analysis - Error Magnitude")
+        for line_data_abs in line_correlations_abs:
+            correlation_abs = line_data_abs['correlation_abs']
+            line = line_data_abs['line']
+            avg_error_abs = line_data_abs['avg_error_abs']
+            error_rate_abs = line_data_abs['error_rate_per_minute_abs']
             
-            # Second sentence (absolute correlation)
             if abs(correlation_abs) > 0.5:
                 strength_abs = "strong" if abs(correlation_abs) > 0.7 else "moderate"
                 direction_abs = "positive" if correlation_abs > 0 else "negative"
-                second_sentence = f"If you take into account only the magnitude of the prediction error, then {line.title()} shows a {strength_abs} {direction_abs} correlation of {correlation_abs:.2f}. For every minute increase in time to station, absolute prediction errors {'increase' if correlation_abs > 0 else 'decrease'} by {abs(error_rate_abs):.1f} seconds. Absolute average error: {avg_error_abs:.0f}s"
+                st.write(f"•  {line.title()} line shows a {strength_abs} {direction_abs} correlation of {correlation_abs:.2f}. For every minute increase in time to station, absolute prediction errors {'increase' if correlation_abs > 0 else 'decrease'} by {abs(error_rate_abs):.1f} seconds. Absolute average error: {avg_error_abs:.0f}s.")
             elif abs(correlation_abs) > 0.3:
-                second_sentence = f"If you take into account only the magnitude of the prediction error, then {line.title()} shows a weak correlation of {correlation_abs:.2f}. For every minute increase in time to station, absolute prediction errors {'increase' if correlation_abs > 0 else 'decrease'} by {abs(error_rate_abs):.1f} seconds.Absolute average error: {avg_error_abs:.0f}s"
+                st.write(f"• {line.title()} line shows a weak correlation of {correlation_abs:.2f}. For every minute increase in time to station, absolute prediction errors {'increase' if correlation_abs > 0 else 'decrease'} by {abs(error_rate_abs):.1f} seconds. Absolute average error: {avg_error_abs:.0f}s.")
             else:
-                second_sentence = f"If you take into account only the magnitude of the prediction error, then {line.title()} shows minimal correlation of {correlation_abs:.2f}. For every minute increase in time to station, absolute prediction errors {'increase' if correlation_abs > 0 else 'decrease'} by {abs(error_rate_abs):.1f} seconds. Absolute average error: {avg_error_abs:.0f}s"
-        
-            st.write(first_sentence,second_sentence)
+                st.write(f"• {line.title()} line shows minimal correlation of {correlation_abs:.2f}. For every minute increase in time to station, absolute prediction errors {'increase' if correlation_abs > 0 else 'decrease'} by {abs(error_rate_abs):.1f} seconds. Absolute average error: {avg_error_abs:.0f}s.")
                 
         st.markdown("---")  # Add a separator between inbound and outbound sections
         
@@ -1026,7 +1048,8 @@ with tab2:
             st.plotly_chart(fig_outbound, use_container_width=True)
         
             # Basic statistics
-            st.subheader("Outbound Statistics - 300 observations per line")
+            st.subheader("Outbound Statistics")
+            st.write("3000 observations per line")
             # Sample 3000 predictions per line
             sampled_data_outbound = outbound_data.groupby('line').apply(lambda x: x.sample(n=min(300, len(x)), random_state=42)).reset_index(drop=True)
             col1, col2, col3 = st.columns(3)
@@ -1039,7 +1062,6 @@ with tab2:
                 st.metric("Overall Correlation", f"{sampled_data_outbound['error_seconds'].corr(sampled_data_outbound['time_to_station']):.2f}")
                 st.metric("Overall Correlation (abs)", f"{sampled_data_outbound['error_seconds'].abs().corr(sampled_data_outbound['time_to_station']):.2f}")
 
-        st.subheader("Line-Specific Analysis - all observations per line")
         line_correlations = []
         line_correlations_abs = []
         for line in outbound_data['line'].unique():
@@ -1080,38 +1102,39 @@ with tab2:
 
         # Display line-specific insights
         
-        for i, (line_data, line_data_abs) in enumerate(zip(line_correlations, line_correlations_abs)):
+        # Display line-specific insights
+        st.subheader("Correlation Analysis")
+        for line_data in line_correlations:
             correlation = line_data['correlation']
-            correlation_abs = line_data_abs['correlation_abs']
             line = line_data['line']
             avg_error = line_data['avg_error']
-            avg_error_abs = line_data_abs['avg_error_abs']
             avg_time = line_data['avg_time']
             error_rate = line_data['error_rate_per_minute']
-            error_rate_abs = line_data_abs['error_rate_per_minute_abs']
             
-            # First sentence (regular correlation)
             if abs(correlation) > 0.5:
                 strength = "strong" if abs(correlation) > 0.7 else "moderate"
                 direction = "positive" if correlation > 0 else "negative"
-                first_sentence = f"• {line.title()} line shows a {strength} {direction} correlation of {correlation:.2f} as per seen on the trendline. For every minute increase in time to station, prediction errors {'increase' if correlation > 0 else 'decrease'} by {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s, average time to station: {avg_time:.0f}s."
+                st.write(f"• {line.title()} line shows a {strength} {direction} correlation of {correlation:.2f}. For every minute increase in time to station, prediction errors {'increase' if correlation > 0 else 'decrease'} by {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s, average time to station: {avg_time:.0f}s.")
             elif abs(correlation) > 0.3:
-                first_sentence = f"• {line.title()} line shows a weak correlation of {correlation:.2f} as per seen on the trendline. For every minute increase in time to station, prediction errors {'increase' if correlation > 0 else 'decrease'} by {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s, average time to station: {avg_time:.0f}s."
+                st.write(f"• {line.title()} line shows a weak correlation of {correlation:.2f}. For every minute increase in time to station, prediction errors {'increase' if correlation > 0 else 'decrease'} by {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s, average time to station: {avg_time:.0f}s.")
             else:
-                first_sentence = f"• {line.title()} line shows minimal correlation of {correlation:.2f} as per seen on the trendline. For every minute increase in time to station, prediction errors {'increase' if correlation > 0 else 'decrease'} by {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s, average time to station: {avg_time:.0f}s."
+                st.write(f"• {line.title()} line shows minimal correlation of {correlation:.2f}. For every minute increase in time to station, prediction errors {'increase' if correlation > 0 else 'decrease'} by {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s, average time to station: {avg_time:.0f}s.")
+        
+        st.subheader("Absolute Correlation Analysis - Error Magnitude")
+        for line_data_abs in line_correlations_abs:
+            correlation_abs = line_data_abs['correlation_abs']
+            line = line_data_abs['line']
+            avg_error_abs = line_data_abs['avg_error_abs']
+            error_rate_abs = line_data_abs['error_rate_per_minute_abs']
             
-            # Second sentence (absolute correlation)
             if abs(correlation_abs) > 0.5:
                 strength_abs = "strong" if abs(correlation_abs) > 0.7 else "moderate"
                 direction_abs = "positive" if correlation_abs > 0 else "negative"
-                second_sentence = f"If you take into account only the magnitude of the prediction error, then {line.title()} shows a {strength_abs} {direction_abs} correlation of {correlation_abs:.2f}. For every minute increase in time to station, absolute prediction errors {'increase' if correlation_abs > 0 else 'decrease'} by {abs(error_rate_abs):.1f} seconds. Absolute average error: {avg_error_abs:.0f}s."
+                st.write(f"•  {line.title()} line shows a {strength_abs} {direction_abs} correlation of {correlation_abs:.2f}. For every minute increase in time to station, absolute prediction errors {'increase' if correlation_abs > 0 else 'decrease'} by {abs(error_rate_abs):.1f} seconds. Absolute average error: {avg_error_abs:.0f}s.")
             elif abs(correlation_abs) > 0.3:
-                second_sentence = f"If you take into account only the magnitude of the prediction error, then {line.title()} shows a weak correlation of {correlation_abs:.2f}. For every minute increase in time to station, absolute prediction errors {'increase' if correlation_abs > 0 else 'decrease'} by {abs(error_rate_abs):.1f} seconds. Absolute average error: {avg_error_abs:.0f}s."
+                st.write(f"• {line.title()} line shows a weak correlation of {correlation_abs:.2f}. For every minute increase in time to station, absolute prediction errors {'increase' if correlation_abs > 0 else 'decrease'} by {abs(error_rate_abs):.1f} seconds. Absolute average error: {avg_error_abs:.0f}s.")
             else:
-                second_sentence = f"If you take into account only the magnitude of the prediction error, then {line.title()} shows minimal correlation of {correlation_abs:.2f}. For every minute increase in time to station, absolute prediction errors {'increase' if correlation_abs > 0 else 'decrease'} by {abs(error_rate_abs):.1f} seconds. Absolute average error: {avg_error_abs:.0f}s."
-            
-            st.write(first_sentence,second_sentence)
-
+                st.write(f"• {line.title()} line shows minimal correlation of {correlation_abs:.2f}. For every minute increase in time to station, absolute prediction errors {'increase' if correlation_abs > 0 else 'decrease'} by {abs(error_rate_abs):.1f} seconds. Absolute average error: {avg_error_abs:.0f}s.")
 
 with tab3:
     st.header("Line & Time Analysis")
