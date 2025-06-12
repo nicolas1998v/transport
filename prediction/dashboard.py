@@ -40,7 +40,7 @@ SELECT
     (SELECT COUNT(*) FROM `nico-playground-384514.transport_predictions.initial_errors`) +
     (SELECT COUNT(*) FROM `nico-playground-384514.transport_predictions.any_errors`) as total_count
 """
-count_job = client.query(count_query)
+count_job = run_query(count_query)
 total_count = next(count_job.result()).total_count
 
 # Display refresh info and counts
