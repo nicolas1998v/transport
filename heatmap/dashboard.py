@@ -106,20 +106,40 @@ def load_latest_results():
             if not blobs:
                 return None
             
-            # Sort blobs by name (which includes timestamp) and get the latest hour's files
+            # Sort blobs by name (which includes timestamp)
             sorted_blobs = sorted(blobs, key=lambda x: x.name, reverse=True)
-            latest_hour = sorted_blobs[0].name.split('journey_times_')[1].split('_batch')[0]
-            latest_blobs = [b for b in sorted_blobs if latest_hour in b.name][:2]
             
-            # Load and combine both batches
+            # Get the latest hour and subtract 1 hour
+            latest_hour = sorted_blobs[0].name.split('journey_times_')[1].split('_batch')[0]
+            latest_date = datetime.strptime(latest_hour, '%Y%m%d_%H')
+            previous_hour = (latest_date - timedelta(hours=1)).strftime('%Y%m%d_%H')
+            
+            # Get both batch files for the previous hour
+            batch1_blob = next((b for b in sorted_blobs if f'journey_times_{previous_hour}_batch1' in b.name), None)
+            batch2_blob = next((b for b in sorted_blobs if f'journey_times_{previous_hour}_batch2' in b.name), None)
+            
+            # Load and combine available batches
             all_data = []
             total_processed = 0
+            available_batches = []
             
-            for blob in latest_blobs:
-                data = json.loads(blob.download_as_string())
+            if batch1_blob:
+                data = json.loads(batch1_blob.download_as_string())
                 all_data.extend(data['data'])
                 total_processed += data['total_processed']
+                available_batches.append(1)
             
+            if batch2_blob:
+                data = json.loads(batch2_blob.download_as_string())
+                all_data.extend(data['data'])
+                total_processed += data['total_processed']
+                available_batches.append(2)
+            
+            if not all_data:
+                st.warning(f"No batch files found for hour {previous_hour}")
+                return None
+                
+                            
             # Load postcode coordinates
             postcode_blob = bucket.blob('london_postcodes_filtered.csv')
             postcodes_df = pd.read_csv(io.BytesIO(postcode_blob.download_as_string()))
@@ -133,8 +153,9 @@ def load_latest_results():
             
             return {
                 'data': merged_df,
-                'timestamp': latest_hour,
-                'total_processed': total_processed
+                'timestamp': previous_hour,
+                'total_processed': total_processed,
+                'batches': available_batches
             }
             
     except Exception as e:
@@ -148,7 +169,7 @@ st.caption('Journey times from SW1A 2JR to all London postcodes')
 results = load_latest_results()
 if results:
     current_time = datetime.now()
-    last_update = datetime.now() 
+    last_update = current_time
     next_update = current_time.replace(minute=0) + pd.Timedelta(hours=1)
     minutes_until_update = int((next_update - current_time).total_seconds() / 60)
     
