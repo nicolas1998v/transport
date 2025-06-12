@@ -181,8 +181,8 @@ if results:
     current_time = datetime.now()
     # Add 1 hour to match VM time
     current_time = current_time + timedelta(hours=1)
-    last_update = current_time.replace(minute=0) - timedelta(hours=1)
-    next_update = current_time.replace(minute=0)
+    last_update = current_time.replace(minute=0)
+    next_update = current_time.replace(minute=0) + timedelta(hours=1)
     minutes_until_update = int((next_update - current_time).total_seconds() / 60)
     
     st.write(f"🕒 Last updated: {last_update.strftime('%Y-%m-%d %H:00')} | "
