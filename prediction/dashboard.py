@@ -18,7 +18,7 @@ try:
         # Use Streamlit secrets for cloud deployment
         client = bigquery.Client(credentials=credentials, project=credentials.project_id)
         
-    else:
+    if not credentials:
          client = bigquery.Client.from_service_account_info(
             st.secrets["gcp_service_account"]
          )
