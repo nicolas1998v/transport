@@ -125,9 +125,20 @@ def load_latest_results():
             current_time = datetime.now() + timedelta(hours=1)
             target_hour = (current_time - timedelta(hours=1)).strftime('%Y%m%d_%H')
             
+            # Debug info
+            st.write("🔍 Debug Info:")
+            st.write(f"Current time: {current_time}")
+            st.write(f"Looking for files with hour: {target_hour}")
+            st.write("Available files:")
+            for blob in sorted_blobs[:5]:  # Show first 5 files
+                st.write(f"- {blob.name}")
+            
             # Get both batch files for the target hour
             batch1_blob = next((b for b in sorted_blobs if f'journey_times_{target_hour}_batch1' in b.name), None)
             batch2_blob = next((b for b in sorted_blobs if f'journey_times_{target_hour}_batch2' in b.name), None)
+            
+            st.write(f"Found batch1: {batch1_blob.name if batch1_blob else 'None'}")
+            st.write(f"Found batch2: {batch2_blob.name if batch2_blob else 'None'}")
             
             # Load and combine available batches
             all_data = []
