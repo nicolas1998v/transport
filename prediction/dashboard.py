@@ -5,34 +5,16 @@ from google.cloud import storage
 from google.oauth2 import service_account
 import plotly.express as px
 from datetime import datetime, timedelta
-import plotly.graph_objects as go
-from dotenv import load_dotenv
+from pathlib import Path
 
-# Initialize Google Cloud client
-try:
-    credentials = service_account.Credentials.from_service_account_file(
+
+    credentials = Path(
             '/Users/nicolas/credentials.json')
-    
-    # Check if we're running on Streamlit Cloud by checking for secrets
-    if credentials:
-        # Use Streamlit secrets for cloud deployment
-        client = bigquery.Client(credentials=credentials, project=credentials.project_id)
-        
+            
     if not credentials:
          client = bigquery.Client.from_service_account_info(
             st.secrets["gcp_service_account"]
          )
-except Exception as e:
-    st.error(f"""
-    ⚠️ Error initializing Google Cloud client: {str(e)}
-    
-    For local development:
-    - Ensure credentials.json exists at /Users/nicolas/credentials.json
-    
-    For Streamlit Cloud:
-    - Add your service account credentials in the Streamlit secrets management
-    """)
-    st.stop()
 
 # Set page config
 st.set_page_config(page_title="Kings Cross Tube Prediction Analysis", layout="wide")
