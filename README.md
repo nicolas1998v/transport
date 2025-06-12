@@ -71,7 +71,9 @@ This dashboard analyzes and visualizes prediction errors for London Underground 
 ## Data Journey
 
 - **Understanding the Data:**  
-  It took considerable time to understand the structure and quirks of the TfL data. I had to go through a long phase of data cleaning, excluding the circle line due to data quality issues,  excluding some Terminus stations in which the train is on standby and still predicting, and understanding the different glitches of the API. To isolate individual train runs and remove glitches, I developed a query that checked for observations, allowing me to segment continuous data into distinct runs.
+  I first had to understand the structure and quirks of the TfL data.  
+  I had to go through a long phase of data cleaning, excluding the circle line due to data quality issues, excluding some Terminus stations in which the train is on standby and still predicting, and understanding the different glitches of the API.  
+  To isolate individual train runs and remove glitches, I developed a query that checked for observations, allowing me to segment continuous data into distinct runs.
 - **Data Collection:**  
   - **Initial Approach:** I started by making API requests every minute.
   - **Optimization:** To better capture arrivals and anomaly magnitudes, I switched to every 30 seconds. However, this sometimes wasn’t enough to process all data when there were many lengthy arrivals, so I increased the interval to 33 seconds, which proved to be the best balance between arrival detection and processing time.
@@ -147,14 +149,16 @@ streamlit run prediction/dashboard.py   # For the prediction dashboard
 ```
 For both projects you would need to set a micro-VM for each and copy the service, run and main files inside the VM to the appropriate locations. 
 
-Also you would need to have a service account with BigQuery Admin
-Cloud Build Service Account
-Compute Instance Admin (v1)
-Service Account User
-Storage Object Viewer roles. And retrieve a key and place it in the VM.
+Also you would need to have a service account with 
+- BigQuery Admin
+- Compute Instance Admin (v1)
+- Storage Object Creater
+- Storage Object Viewer roles. And retrieve a key and place it in the VM.
 
 You would need to retrieve many keys from the Transport for London API (by creating many accounts).
-For the heatmap you would need to filter the data to get valid postcodes, and for the predictions you would need to create 3 tables in Bigquery and set up API connections to Ticketmaster and WeatherMap API by setting appropriate keys in the .env file. The events and weather data collection is done through cloud functions as its simpler, and scheduled by Cloud Scheduler.
+For the heatmap you would need to filter the data to get valid postcodes.  
+For the predictions you would need to create 3 tables in Bigquery and set up API connections to Ticketmaster and WeatherMap API by adding appropriate keys in the .env file.  
+The events and weather data collection is done through Cloud Functions as its simpler, and scheduled by Cloud Scheduler.
 
 ---
 
