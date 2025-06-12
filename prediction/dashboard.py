@@ -8,10 +8,10 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 
-    credentials = Path(
+credentials = Path(
             '/Users/nicolas/credentials.json')
             
-    if not credentials:
+if not credentials:
          client = bigquery.Client.from_service_account_info(
             st.secrets["gcp_service_account"]
          )
