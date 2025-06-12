@@ -46,7 +46,7 @@ count_df = run_query(count_query)
 total_count = count_df['total_count'].iloc[0]
 
 # Display refresh info and counts
-last_refresh = st.session_state.last_refresh_time.strftime("%Y-%m-%d %H:%M:%S")
+last_refresh = (st.session_state.last_refresh_time + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
 st.info(f"Data refreshes every hour. Last refreshed: {last_refresh} | Total observations: {total_count:,}")
 
 # Create tabs
