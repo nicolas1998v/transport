@@ -150,21 +150,21 @@ def store_weather_data(weather_data):
 
 def main():
     """Main function to collect weather data."""
-        # Create table if it doesn't exist
-        create_weather_table()
-        
-        # Check last collection time
-        last_collection = check_last_collection()
-        if last_collection:
-            time_since_last = datetime.now() - last_collection
-            if time_since_last < timedelta(minutes=55):  # Don't collect if less than 55 minutes since last collection
+    # Create table if it doesn't exist
+    create_weather_table()
+    
+    # Check last collection time
+    last_collection = check_last_collection()
+    if last_collection:
+        time_since_last = datetime.now() - last_collection
+        if time_since_last < timedelta(minutes=55):  # Don't collect if less than 55 minutes since last collection
             print(f"Skipping collection - too soon since last collection ({time_since_last})")
-                return
-        
-        # Get and store weather data
-        weather_data = get_weather_data()
-        if weather_data:
-            store_weather_data(weather_data)
+            return
+    
+    # Get and store weather data
+    weather_data = get_weather_data()
+    if weather_data:
+        store_weather_data(weather_data)
         print("Weather data collected successfully")
     else:
         print("No weather data collected") 
