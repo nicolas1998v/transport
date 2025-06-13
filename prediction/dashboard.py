@@ -91,8 +91,13 @@ def get_cached_query(query):
                 cached_result = redis_client.get(cache_key)
                 if cached_result is not None:
                     st.success(f"Cache HIT at {datetime.now().strftime('%H:%M:%S')}")
+                    # Debug print
+                    st.write("Raw Redis data:", cached_result[:500])  # Show first 500 chars
                     # Parse the JSON string back to DataFrame
                     df = pd.read_json(cached_result)
+                    # Debug print
+                    st.write("DataFrame columns after Redis:", df.columns.tolist())
+                    st.write("DataFrame head after Redis:", df.head())
                     # Ensure numeric columns are numeric
                     numeric_columns = ['accuracy_percentage', 'accuracy_percentage_60s', 'avg_error', 'avg_abs_error', 'total_predictions']
                     for col in numeric_columns:
@@ -1456,11 +1461,6 @@ with tab3:
         # Debug prints
         st.write("DataFrame columns:", day_line_df.columns.tolist())
         st.write("DataFrame head:", day_line_df.head())
-        
-        # Convert numeric columns to float
-        numeric_columns = ['accuracy_percentage', 'accuracy_percentage_60s', 'avg_error', 'avg_abs_error']
-        for col in numeric_columns:
-            day_line_df[col] = pd.to_numeric(day_line_df[col], errors='coerce')
         
         # Create a mapping of day numbers to names (1-7)
         day_names = {
