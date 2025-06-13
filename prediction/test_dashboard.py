@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import plotly.express as px
 from google.cloud import bigquery
 import redis
 import json
@@ -76,7 +77,14 @@ def get_cached_query(query):
                 cached_result = redis_client.get(cache_key)
                 if cached_result is not None:
                     st.success(f"Cache HIT at {datetime.now().strftime('%H:%M:%S')}")
-                    return pd.read_json(cached_result)
+                    # Parse the JSON string back to DataFrame
+                    df = pd.read_json(cached_result)
+                    # Ensure numeric columns are numeric
+                    numeric_columns = ['accuracy_percentage', 'accuracy_percentage_60s', 'avg_error', 'avg_abs_error', 'total_predictions']
+                    for col in numeric_columns:
+                        if col in df.columns:
+                            df[col] = pd.to_numeric(df[col], errors='coerce')
+                    return df
             except Exception as e:
                 st.warning(f"Redis error: {str(e)}")
         
@@ -88,7 +96,7 @@ def get_cached_query(query):
         if redis_client is not None:
             try:
                 # Cache for 1 hour
-                redis_client.setex(cache_key, 3600, result.to_json())
+                redis_client.setex(cache_key, 3600, result.to_json(orient='records'))
                 st.info("Cached result in Redis")
             except Exception as e:
                 st.warning(f"Failed to cache: {str(e)}")
@@ -101,33 +109,88 @@ def get_cached_query(query):
 
 st.title("Redis Cache Test Dashboard")
 
-# Simple count query
-count_query = """
-SELECT COUNT(*) as total_count 
-FROM `nico-playground-384514.transport_predictions.any_errors`
-"""
-
-# Simple accuracy query
-accuracy_query = """
+# Test the day_line_query
+st.subheader("Testing Day Line Query")
+day_line_query = """
 SELECT 
     line,
+    day_of_week,
     COUNT(*) as total_predictions,
-    ROUND(COUNTIF(ABS(error_seconds) <= 30) / COUNT(*) * 100, 1) as accuracy_percentage
+    ROUND(AVG(error_seconds), 1) as avg_error,
+    ROUND(AVG(ABS(error_seconds)), 1) as avg_abs_error,
+    ROUND(COUNTIF(ABS(error_seconds) <= 30) / COUNT(*) * 100, 1) as accuracy_percentage,
+    ROUND(COUNTIF(ABS(error_seconds) <= 60) / COUNT(*) * 100, 1) as accuracy_percentage_60s
 FROM `nico-playground-384514.transport_predictions.any_errors`
-GROUP BY line
-ORDER BY total_predictions DESC
-LIMIT 5
+GROUP BY line, day_of_week
+ORDER BY line, day_of_week
 """
 
-# Display total count
-st.subheader("Total Predictions")
-count_df = get_cached_query(count_query)
-st.metric("Total Predictions", f"{count_df['total_count'].iloc[0]:,}")
+day_line_df = get_cached_query(day_line_query)
 
-# Display accuracy by line
-st.subheader("Accuracy by Line (Top 5)")
-accuracy_df = get_cached_query(accuracy_query)
-st.dataframe(accuracy_df)
+if not day_line_df.empty:
+    # Display summary metrics
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total Lines", len(day_line_df['line'].unique()))
+    with col2:
+        st.metric("Total Predictions", f"{day_line_df['total_predictions'].sum():,}")
+    with col3:
+        st.metric("Avg Accuracy", f"{day_line_df['accuracy_percentage'].mean():.1f}%")
+    
+    # Create a mapping of day numbers to names (1-7)
+    day_names = {
+        1: 'Monday',
+        2: 'Tuesday',
+        3: 'Wednesday',
+        4: 'Thursday',
+        5: 'Friday',
+        6: 'Saturday',
+        7: 'Sunday'
+    }
+    
+    # Map day numbers to names
+    day_line_df['day_name'] = day_line_df['day_of_week'].map(day_names)
+    
+    # First aggregate any duplicate entries - use first() for error metrics
+    agg_df = day_line_df.groupby(['line', 'day_name']).agg({
+        'accuracy_percentage': 'mean',
+        'accuracy_percentage_60s': 'mean',
+        'avg_error': 'first',
+        'avg_abs_error': 'first'
+    }).reset_index()
+    
+    # Create pivot tables
+    pivot_df = agg_df.pivot(index='line', columns='day_name', values='accuracy_percentage')
+    error_df = agg_df.pivot(index='line', columns='day_name', values='avg_error')
+    abs_error_df = agg_df.pivot(index='line', columns='day_name', values='avg_abs_error')
+    
+    # Reorder columns to match days of week
+    all_days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    pivot_df = pivot_df.reindex(columns=all_days)
+    error_df = error_df.reindex(columns=all_days)
+    abs_error_df = abs_error_df.reindex(columns=all_days)
+    
+    # Display pivot tables with better formatting
+    st.subheader("Accuracy by Line and Day (%)")
+    st.dataframe(pivot_df.style.format("{:.1f}").background_gradient(cmap='RdYlGn', vmin=0, vmax=100))
+    
+    st.subheader("Average Error by Line and Day (seconds)")
+    st.dataframe(error_df.style.format("{:.1f}").background_gradient(cmap='RdYlGn_r'))
+    
+    st.subheader("Average Absolute Error by Line and Day (seconds)")
+    st.dataframe(abs_error_df.style.format("{:.1f}").background_gradient(cmap='RdYlGn_r'))
+    
+    # Create visualizations
+    st.subheader("Accuracy Heatmap")
+    fig = px.imshow(pivot_df,
+                    labels=dict(x="Day of Week", y="Line", color="Accuracy (%)"),
+                    color_continuous_scale='RdYlGn',
+                    aspect="auto")
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Show raw data in expandable section
+    with st.expander("Show Raw Data"):
+        st.dataframe(day_line_df)
 
 # Add a refresh button
 if st.button("Refresh Data"):
