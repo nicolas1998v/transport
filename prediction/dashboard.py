@@ -70,8 +70,8 @@ def get_cached_query(query, ttl=3600):
     df = result.to_dataframe()
     
     try:
-        # Cache the result
-        redis_client.setex(cache_key, ttl, pickle.dumps(df))
+        # Cache the result for exactly 1 hour
+        redis_client.setex(cache_key, 3600, pickle.dumps(df))
         # Update last refresh time in Redis
         redis_client.set('last_refresh_time', datetime.now().isoformat())
     except redis.RedisError:
@@ -128,7 +128,7 @@ SELECT
     (SELECT COUNT(*) FROM `nico-playground-384514.transport_predictions.initial_errors`) +
     (SELECT COUNT(*) FROM `nico-playground-384514.transport_predictions.any_errors`) as total_count
 """
-count_df = run_query(count_query)
+count_df = get_cached_query(count_query)  # Same 1-hour cache as everything else
 total_count = count_df['total_count'].iloc[0]
 
 # Display refresh info and counts
