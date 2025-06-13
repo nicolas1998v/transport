@@ -46,7 +46,10 @@ def get_cached_query(query, ttl=3600):
         # If Redis is not available, just execute the query directly
         print("Redis not available, executing query directly")
         result = client.query(query).result()
-        return result.to_dataframe()
+        df = result.to_dataframe()
+        # Update last refresh time since we got new data
+        st.session_state.last_refresh_time = datetime.now()
+        return df
     
     # Create a unique key for this query
     cache_key = f"query:{hash(query)}"
@@ -60,7 +63,10 @@ def get_cached_query(query, ttl=3600):
     except redis.RedisError:
         print("Redis error, executing query directly")
         result = client.query(query).result()
-        return result.to_dataframe()
+        df = result.to_dataframe()
+        # Update last refresh time since we got new data
+        st.session_state.last_refresh_time = datetime.now()
+        return df
     
     # If not in cache, execute query
     print("Cache miss! Executing query")
@@ -72,6 +78,9 @@ def get_cached_query(query, ttl=3600):
         redis_client.setex(cache_key, ttl, pickle.dumps(df))
     except redis.RedisError:
         print("Redis error while caching, continuing without cache")
+    
+    # Update last refresh time since we got new data
+    st.session_state.last_refresh_time = datetime.now()
     
     return df
 
