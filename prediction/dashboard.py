@@ -6,6 +6,7 @@ from google.cloud import bigquery
 import redis
 import pickle
 from google.oauth2 import service_account
+from datetime import datetime, timedelta
 
 # Initialize Redis client with error handling
 try:
@@ -22,48 +23,59 @@ try:
     print("Successfully connected to Redis")
 except Exception as e:
     print(f"Redis connection error: {str(e)}")
-    print("Falling back to direct BigQuery queries")
+    print("Falling back to in-memory cache")
     redis_available = False
 
-def get_cached_query(query, ttl=3600):
+# Simple in-memory cache as fallback
+memory_cache = {}
+CACHE_TTL = 3600  # 1 hour in seconds
+
+def get_cached_query(query, ttl=CACHE_TTL):
     """Get query results from cache or execute and cache if not found"""
-    if not redis_available:
-        print("Redis not available, executing query directly")
-        result = client.query(query).result()
-        df = result.to_dataframe()
-        return df
-    
     # Create a unique key for this query
     cache_key = f"query:{hash(query)}"
     print(f"Checking cache for key: {cache_key}")
     
-    try:
-        # Try to get from cache
-        cached_result = redis_client.get(cache_key)
-        if cached_result:
-            print("Cache hit! Using cached results")
-            return pickle.loads(cached_result)
-        else:
-            print("Cache miss! No data found in Redis")
-    except redis.RedisError as e:
-        print(f"Redis error: {str(e)}")
-        print("Executing query directly")
-        result = client.query(query).result()
-        df = result.to_dataframe()
-        return df
+    # First try Redis if available
+    if redis_available:
+        try:
+            cached_result = redis_client.get(cache_key)
+            if cached_result:
+                print("Redis cache hit! Using cached results")
+                return pickle.loads(cached_result)
+            else:
+                print("Redis cache miss")
+        except redis.RedisError as e:
+            print(f"Redis error: {str(e)}")
+            print("Falling back to memory cache")
     
-    # If not in cache, execute query
-    print("Executing query and caching results")
+    # If Redis fails or is not available, try memory cache
+    if cache_key in memory_cache:
+        cached_time, cached_result = memory_cache[cache_key]
+        if datetime.now() - cached_time < timedelta(seconds=ttl):
+            print("Memory cache hit! Using cached results")
+            return cached_result
+        else:
+            print("Memory cache expired")
+    
+    # If no cache hit, execute query
+    print("Cache miss! Executing query")
     result = client.query(query).result()
     df = result.to_dataframe()
     
-    try:
-        # Cache the result for exactly 1 hour
-        redis_client.setex(cache_key, 3600, pickle.dumps(df))
-        print("Successfully cached results")
-    except redis.RedisError as e:
-        print(f"Redis error while caching: {str(e)}")
-        print("Continuing without cache")
+    # Try to cache in Redis first
+    if redis_available:
+        try:
+            redis_client.setex(cache_key, ttl, pickle.dumps(df))
+            print("Successfully cached in Redis")
+        except redis.RedisError as e:
+            print(f"Redis caching error: {str(e)}")
+            print("Caching in memory instead")
+            memory_cache[cache_key] = (datetime.now(), df)
+    else:
+        # Cache in memory
+        memory_cache[cache_key] = (datetime.now(), df)
+        print("Successfully cached in memory")
     
     return df
 
@@ -73,7 +85,6 @@ try:
         st.secrets["gcp_service_account"]
     )
     client = bigquery.Client(credentials=credentials, project=credentials.project_id)
-    
 except Exception as e:
     st.error("""
     ⚠️ Error initializing Google Cloud client. Please check your credentials in Streamlit Cloud secrets.
