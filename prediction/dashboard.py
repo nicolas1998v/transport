@@ -91,7 +91,14 @@ def get_cached_query(query):
                 cached_result = redis_client.get(cache_key)
                 if cached_result is not None:
                     st.success(f"Cache HIT at {datetime.now().strftime('%H:%M:%S')}")
-                    return pd.read_json(cached_result)
+                    # Parse the JSON string back to DataFrame
+                    df = pd.read_json(cached_result)
+                    # Ensure numeric columns are numeric
+                    numeric_columns = ['accuracy_percentage', 'accuracy_percentage_60s', 'avg_error', 'avg_abs_error', 'total_predictions']
+                    for col in numeric_columns:
+                        if col in df.columns:
+                            df[col] = pd.to_numeric(df[col], errors='coerce')
+                    return df
             except Exception as e:
                 st.warning(f"Redis error: {str(e)}")
         
@@ -103,7 +110,7 @@ def get_cached_query(query):
         if redis_client is not None:
             try:
                 # Cache for 1 hour
-                redis_client.setex(cache_key, 3600, result.to_json())
+                redis_client.setex(cache_key, 3600, result.to_json(orient='records'))
                 st.info("Cached result in Redis")
             except Exception as e:
                 st.warning(f"Failed to cache: {str(e)}")
@@ -1446,6 +1453,10 @@ with tab3:
     day_line_df = get_cached_query(day_line_query)
     
     if not day_line_df.empty:
+        # Debug prints
+        st.write("DataFrame columns:", day_line_df.columns.tolist())
+        st.write("DataFrame head:", day_line_df.head())
+        
         # Convert numeric columns to float
         numeric_columns = ['accuracy_percentage', 'accuracy_percentage_60s', 'avg_error', 'avg_abs_error']
         for col in numeric_columns:
@@ -1465,6 +1476,8 @@ with tab3:
         # Map day numbers to names
         day_line_df['day_name'] = day_line_df['day_of_week'].map(day_names)
         
+        # Debug print after mapping
+        st.write("DataFrame after mapping:", day_line_df.head())
         
         # Create complete index and columns for all combinations
         all_lines = sorted(day_line_df['line'].unique())
@@ -1478,6 +1491,8 @@ with tab3:
             'avg_abs_error': 'first'
         }).reset_index()
         
+        # Debug print after aggregation
+        st.write("Aggregated DataFrame:", agg_df.head())
         
         # Create pivot tables from aggregated data
         pivot_df = agg_df.pivot(index='line', columns='day_name', values='accuracy_percentage')
