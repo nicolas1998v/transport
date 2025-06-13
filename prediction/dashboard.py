@@ -104,6 +104,9 @@ def run_query(query):
 # Set page config
 st.set_page_config(page_title="Kings Cross Tube Prediction Analysis", layout="wide")
 
+# Initialize session state for last refresh time if it doesn't exist
+if 'last_refresh_time' not in st.session_state:
+    st.session_state.last_refresh_time = datetime.now()
 
 # Get counts from both tables
 count_query = """
@@ -113,7 +116,6 @@ SELECT
 """
 count_df = run_query(count_query)
 total_count = count_df['total_count'].iloc[0]
-
 
 # Display refresh info and counts
 last_refresh = (st.session_state.last_refresh_time + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
