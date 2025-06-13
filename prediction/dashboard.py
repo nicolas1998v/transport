@@ -19,11 +19,7 @@ redis_pool = redis.ConnectionPool(
     socket_connect_timeout=5,
     retry_on_timeout=True,
     health_check_interval=30,
-    decode_responses=False,
-    ssl_cert_reqs=None,
-    ssl_ca_certs=None
-)
-
+    decode_responses=False)
 # Initialize in-memory cache
 memory_cache = {}
 CACHE_TTL = 3600  # 1 hour in seconds
