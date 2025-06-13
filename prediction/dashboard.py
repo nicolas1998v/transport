@@ -1387,8 +1387,7 @@ with tab3:
         all_days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
         
         # First aggregate any duplicate entries - use first() for error metrics
-        agg_df = day_line_df.groupby(('line', 'day_name'), observed=True).agg({
-            'total_predictions': 'sum',
+        agg_df = day_line_df.groupby(['line', 'day_name']).agg({
             'accuracy_percentage': 'mean',
             'accuracy_percentage_60s': 'mean',
             'avg_error': 'first',
