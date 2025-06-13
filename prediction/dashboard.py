@@ -20,7 +20,8 @@ redis_pool = redis.ConnectionPool(
     retry_on_timeout=True,
     health_check_interval=30,
     decode_responses=False,
-    ssl_cert_reqs=None  # Use this instead of ssl=True for Redis Cloud
+    ssl_cert_reqs=None,
+    ssl_ca_certs=None
 )
 
 # Initialize in-memory cache
@@ -1482,7 +1483,6 @@ with tab3:
             'accuracy_percentage_60s': 'mean',
             'avg_error': 'first',
             'avg_abs_error': 'first',
-            'total_predictions': 'sum'  # Changed from 'count' to 'total_predictions'
         }).reset_index()
         
         
@@ -2114,8 +2114,7 @@ with tab7:
         period_stats = peak_df.groupby('time_period', observed=True).agg({
             'total_predictions': 'sum',
             'accuracy_percentage': 'mean',
-            'avg_error': lambda x: (x * peak_df.loc[x.index, 'total_predictions']).sum() / peak_df.loc[x.index, 'total_predictions'].sum(),
-            'count': 'sum'
+            'avg_error': lambda x: (x * peak_df.loc[x.index, 'total_predictions']).sum() / peak_df.loc[x.index, 'total_predictions'].sum()
         }).reset_index()
         
         # Display metrics in three columns
