@@ -89,9 +89,7 @@ def get_last_refresh_time():
         if last_refresh_str:
             return datetime.fromisoformat(last_refresh_str.decode())
     except (redis.RedisError, ValueError):
-        pass
-    
-    return datetime.now()
+        return datetime.now()
 
 # Initialize GCP client with credentials from Streamlit secrets
 try:
@@ -133,7 +131,7 @@ total_count = count_df['total_count'].iloc[0]
 
 # Display refresh info and counts
 last_refresh = get_last_refresh_time()
-next_refresh = (last_refresh + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
+last_refresh = (last_refresh + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
 st.info(f"Data refreshes every hour. Last refreshed: {last_refresh} | Total observations: {total_count:,}")
 
 # Create tabs
