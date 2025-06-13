@@ -91,13 +91,8 @@ def get_cached_query(query):
                 cached_result = redis_client.get(cache_key)
                 if cached_result is not None:
                     st.success(f"Cache HIT at {datetime.now().strftime('%H:%M:%S')}")
-                    # Debug print
-                    st.write("Raw Redis data:", cached_result[:500])  # Show first 500 chars
                     # Parse the JSON string back to DataFrame
                     df = pd.read_json(cached_result)
-                    # Debug print
-                    st.write("DataFrame columns after Redis:", df.columns.tolist())
-                    st.write("DataFrame head after Redis:", df.head())
                     # Ensure numeric columns are numeric
                     numeric_columns = ['accuracy_percentage', 'accuracy_percentage_60s', 'avg_error', 'avg_abs_error', 'total_predictions']
                     for col in numeric_columns:
@@ -115,7 +110,8 @@ def get_cached_query(query):
         if redis_client is not None:
             try:
                 # Cache for 1 hour
-                redis_client.setex(cache_key, 3600, result.to_json(orient='records'))
+                json_str = result.to_json(orient='records', date_format='iso')
+                redis_client.setex(cache_key, 3600, json_str)
                 st.info("Cached result in Redis")
             except Exception as e:
                 st.warning(f"Failed to cache: {str(e)}")
