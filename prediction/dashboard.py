@@ -134,7 +134,7 @@ total_count = count_df['total_count'].iloc[0]
 # Display refresh info and counts
 last_refresh = get_last_refresh_time()
 next_refresh = (last_refresh + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
-st.info(f"Data refreshes every hour. Last refreshed: {next_refresh} | Total observations: {total_count:,}")
+st.info(f"Data refreshes every hour. Last refreshed: {last_refresh} | Total observations: {total_count:,}")
 
 # Create tabs
 tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13 = st.tabs([
