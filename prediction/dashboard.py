@@ -7,31 +7,71 @@ from datetime import datetime, timedelta
 import plotly.graph_objects as go
 import redis
 import pickle
+import time
 
-# Initialize Redis client
-redis_client = redis.Redis(host='localhost', port=6379, db=0)
+# Initialize Redis client with error handling
+max_retries = 3
+retry_delay = 1  # seconds
+
+for attempt in range(max_retries):
+    try:
+        redis_client = redis.Redis(
+            host='127.0.0.1',
+            port=6379,
+            db=0,
+            socket_timeout=5,
+            socket_connect_timeout=5
+        )
+        # Test connection
+        redis_client.ping()
+        redis_available = True
+        print("Successfully connected to Redis")
+        break
+    except (redis.ConnectionError, redis.TimeoutError) as e:
+        print(f"Redis connection attempt {attempt + 1} failed: {str(e)}")
+        if attempt < max_retries - 1:
+            print(f"Retrying in {retry_delay} seconds...")
+            time.sleep(retry_delay)
+        else:
+            print("All Redis connection attempts failed. Falling back to direct BigQuery queries")
+            redis_available = False
+    except Exception as e:
+        print(f"Unexpected error connecting to Redis: {str(e)}")
+        redis_available = False
+        break
 
 def get_cached_query(query, ttl=3600):
     """Get query results from cache or execute and cache if not found"""
+    if not redis_available:
+        # If Redis is not available, just execute the query directly
+        print("Redis not available, executing query directly")
+        result = client.query(query).result()
+        return result.to_dataframe()
+    
     # Create a unique key for this query
     cache_key = f"query:{hash(query)}"
     
-    # Try to get from cache
-    cached_result = redis_client.get(cache_key)
-    if cached_result:
-        print("Cache hit! Using cached results")
-        return pickle.loads(cached_result)
+    try:
+        # Try to get from cache
+        cached_result = redis_client.get(cache_key)
+        if cached_result:
+            print("Cache hit! Using cached results")
+            return pickle.loads(cached_result)
+    except redis.RedisError:
+        print("Redis error, executing query directly")
+        result = client.query(query).result()
+        return result.to_dataframe()
     
     # If not in cache, execute query
     print("Cache miss! Executing query")
     result = client.query(query).result()
     df = result.to_dataframe()
     
-    # Cache the result
-    redis_client.setex(cache_key, ttl, pickle.dumps(df))
-    
-    # Update last refresh time on cache miss
-    st.session_state.last_refresh_time = datetime.now()
+    try:
+        # Cache the result
+        redis_client.setex(cache_key, ttl, pickle.dumps(df))
+    except redis.RedisError:
+        print("Redis error while caching, continuing without cache")
     
     return df
 
@@ -1056,7 +1096,7 @@ with tab2:
             st.subheader("Outbound Statistics")
             st.write("3000 observations per line")
             # Sample 3000 predictions per line
-            sampled_data_outbound = outbound_data.groupby('line').apply(lambda x: x.sample(n=min(300, len(x)), random_state=42)).reset_index(drop=True)
+            sampled_data_outbound = outbound_data.groupby('line').apply(lambda x: x.sample(n=min(3000, len(x)), random_state=42)).reset_index(drop=True)
             col1, col2, col3 = st.columns(3)
         with col1:
                 st.metric("Average Error", f"{sampled_data_outbound['error_seconds'].mean():.0f} seconds")
