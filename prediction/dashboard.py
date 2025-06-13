@@ -3,112 +3,20 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from google.cloud import bigquery
-import redis
 import pickle
 from google.oauth2 import service_account
 from datetime import datetime, timedelta
 import os
-
-# Initialize Redis connection pool
-redis_pool = redis.ConnectionPool(
-    host='redis-18505.c335.europe-west2-1.gce.redns.redis-cloud.com',
-    port=18505,
-    password='CLMGPMpmeTRUORj43m7JwEdcQx3f6KVZ',
-    db=0,
-    socket_timeout=5,
-    socket_connect_timeout=5,
-    retry_on_timeout=True,
-    health_check_interval=30,
-    decode_responses=False)
-# Initialize in-memory cache
-memory_cache = {}
-CACHE_TTL = 3600  # 1 hour in seconds
-
-def get_cached_query(query, cache_key_prefix='query'):
-    """Get query results from cache or execute if not cached"""
-    # Generate cache key
-    cache_key = f"{cache_key_prefix}:{hash(query)}"
-    print(f"Generated cache key: {cache_key}")
-    
-    # First try Redis
-    try:
-        print(f"Attempting to connect to Redis Cloud at redis-18505.c335.europe-west2-1.gce.redns.redis-cloud.com:18505...")
-        # Get connection from pool
-        redis_client = redis.Redis(connection_pool=redis_pool)
-        
-        # Test connection with detailed error handling
-        try:
-            print("Testing Redis connection...")
-            if not redis_client.ping():
-                print("Redis server is not responding")
-                raise redis.ConnectionError("Redis not responding")
-        except redis.AuthenticationError as e:
-            print(f"Authentication error: {str(e)}")
-            raise
-        except redis.ConnectionError as e:
-            print(f"Connection error: {str(e)}")
-            raise
-            
-        print("Redis connection successful")
-        
-        # Try to get from Redis
-        print("Attempting to get cached result from Redis...")
-        cached_result = redis_client.get(cache_key)
-        if cached_result:
-            print(f"Redis cache hit for key: {cache_key}")
-            return pd.read_pickle(cached_result)
-            
-        print(f"Redis cache miss for key: {cache_key}")
-        # Execute query
-        print("Executing query...")
-        result = client.query(query).to_dataframe()
-        
-        # Cache result in Redis
-        try:
-            print("Attempting to cache result in Redis...")
-            redis_client.setex(
-                cache_key,
-                timedelta(hours=1),
-                pd.to_pickle(result)
-            )
-            print(f"Successfully cached in Redis")
-        except Exception as e:
-            print(f"Failed to cache in Redis: {str(e)}")
-            
-        return result
-        
-    except (redis.ConnectionError, redis.AuthenticationError) as e:
-        print(f"Redis error: {str(e)}")
-        print("Falling back to in-memory cache")
-        
-        # Try memory cache
-        if cache_key in memory_cache:
-            cached_time, cached_result = memory_cache[cache_key]
-            if datetime.now() - cached_time < timedelta(seconds=CACHE_TTL):
-                print(f"Memory cache hit for key: {cache_key}")
-                return cached_result
-            else:
-                print(f"Memory cache expired for key: {cache_key}")
-        
-        # If no cache hit, execute query
-        print("Executing query (no cache available)...")
-        result = client.query(query).to_dataframe()
-        
-        # Cache in memory
-        memory_cache[cache_key] = (datetime.now(), result)
-        print(f"Successfully cached in memory")
-        
-        return result
-    except Exception as e:
-        print(f"Unexpected error: {str(e)}")
-        return client.query(query).to_dataframe()
+from urllib.parse import urlparse
+import redis
 
 # Initialize GCP client with credentials from Streamlit secrets
 try:
     credentials = service_account.Credentials.from_service_account_info(
         st.secrets["gcp_service_account"]
     )
-    client = bigquery.Client(credentials=credentials, project=credentials.project_id)
+    project_id = credentials.project_id
+    client = bigquery.Client(credentials=credentials, project=project_id)
 except Exception as e:
     st.error("""
     ⚠️ Error initializing Google Cloud client. Please check your credentials in Streamlit Cloud secrets.
@@ -116,6 +24,71 @@ except Exception as e:
     """)
     st.error(str(e))
     st.stop()
+
+# Initialize Redis connection
+redis_client = None
+try:
+    redis_url = "redis-16505.c335.europe-west2-1.gce.redns.redis-cloud.com:16505"
+    redis_password = "TK0d2LZXE1umqarhMIM1tJsWD7LVHNdg"
+    
+    # Parse the Redis URL to get host and port
+    host = "redis-16505.c335.europe-west2-1.gce.redns.redis-cloud.com"
+    port = 16505
+    
+    print(f"Connecting to Redis at {host}:{port}")
+    
+    # Create Redis client with SSL
+    redis_client = redis.Redis(
+        host=host,
+        port=port,
+        password=redis_password,
+        ssl=True,
+        ssl_cert_reqs=None,  # Don't verify SSL certificate
+        decode_responses=False  # Keep as bytes for JSON serialization
+    )
+    
+    # Test connection
+    if redis_client.ping():
+        print("Successfully connected to Redis")
+    else:
+        print("Failed to connect to Redis")
+        redis_client = None
+except Exception as e:
+    print(f"Error connecting to Redis: {str(e)}")
+    redis_client = None
+
+@st.cache_data(ttl=3600)  # Fallback cache for 1 hour
+def run_query(query):
+    """Execute a BigQuery query with Streamlit caching."""
+    return client.query(query).to_dataframe()
+
+def get_cached_query(query):
+    """Try Redis first, fall back to Streamlit cache if Redis fails."""
+    try:
+        # Try Redis first
+        if redis_client is not None:
+            try:
+                cached_result = redis_client.get(hash(query))
+                if cached_result is not None:
+                    return pd.read_json(cached_result)
+            except Exception:
+                pass  # Fall through to Streamlit cache
+        
+        # If Redis fails or no cache hit, use Streamlit cache
+        result = run_query(query)
+        
+        # Try to cache in Redis for next time
+        if redis_client is not None:
+            try:
+                redis_client.setex(hash(query), 3600, result.to_json())
+            except Exception:
+                pass  # Ignore Redis errors, we still have Streamlit cache
+        
+        return result
+        
+    except Exception as e:
+        print(f"Error executing query: {str(e)}")
+        raise
 
 # Set page config
 st.set_page_config(page_title="Kings Cross Tube Prediction Analysis", layout="wide")
@@ -2908,8 +2881,7 @@ with tab13:
             category_stats = event_df.groupby(['event_category', 'line'], observed=True).agg({
                 'accuracy_percentage': 'mean',
                 'avg_abs_error': 'mean',
-                'total_predictions': 'sum',
-                'count': 'sum'
+                'total_predictions': 'sum'
             }).round(1).reset_index()
             
             # Create accuracy bar plot
@@ -2949,8 +2921,7 @@ with tab13:
             venue_stats = event_df[event_df['time_window'] == 'Event Window'].groupby('venue_name', observed=True).agg({
                 'total_predictions': 'sum',
                 'accuracy_percentage': 'mean',
-                'avg_abs_error': 'mean',
-                'count': 'sum'
+                'avg_abs_error': 'mean'
             }).round(1).reset_index()
             venue_stats = venue_stats.sort_values('accuracy_percentage', ascending=False)
             # Rename columns for better display
