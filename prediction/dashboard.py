@@ -13,12 +13,14 @@ import os
 redis_pool = redis.ConnectionPool(
     host='redis-18505.c335.europe-west2-1.gce.redns.redis-cloud.com',
     port=18505,
+    password='CLMGPMpmeTRUORj43m7JwEdcQx3f6KVZ',
     db=0,
     socket_timeout=5,
     socket_connect_timeout=5,
     retry_on_timeout=True,
     health_check_interval=30,
-    decode_responses=False
+    decode_responses=False,
+    ssl=True  # Enable SSL for Redis Cloud
 )
 
 # Initialize in-memory cache
