@@ -1,44 +1,24 @@
 import streamlit as st
 import pandas as pd
-from google.cloud import bigquery
-from google.oauth2 import service_account
 import plotly.express as px
-from datetime import datetime, timedelta
 import plotly.graph_objects as go
+from google.cloud import bigquery
 import redis
 import pickle
-import time
+from google.oauth2 import service_account
 
 # Initialize Redis client with error handling
-max_retries = 3
-retry_delay = 1  # seconds
-
-for attempt in range(max_retries):
-    try:
-        redis_client = redis.Redis(
-            host='127.0.0.1',
-            port=6379,
-            db=0,
-            socket_timeout=5,
-            socket_connect_timeout=5
-        )
-        # Test connection
-        redis_client.ping()
-        redis_available = True
-        print("Successfully connected to Redis")
-        break
-    except (redis.ConnectionError, redis.TimeoutError) as e:
-        print(f"Redis connection attempt {attempt + 1} failed: {str(e)}")
-        if attempt < max_retries - 1:
-            print(f"Retrying in {retry_delay} seconds...")
-            time.sleep(retry_delay)
-        else:
-            print("All Redis connection attempts failed. Falling back to direct BigQuery queries")
-            redis_available = False
-    except Exception as e:
-        print(f"Unexpected error connecting to Redis: {str(e)}")
-        redis_available = False
-        break
+try:
+    redis_client = redis.Redis(host='127.0.0.1', port=6379, db=0)
+    redis_available = True
+    print("Successfully connected to Redis")
+except (redis.ConnectionError, redis.TimeoutError) as e:
+    print(f"Redis connection error: {str(e)}")
+    print("Falling back to direct BigQuery queries")
+    redis_available = False
+except Exception as e:
+    print(f"Unexpected error connecting to Redis: {str(e)}")
+    redis_available = False
 
 def get_cached_query(query, ttl=3600):
     """Get query results from cache or execute and cache if not found"""
@@ -72,24 +52,10 @@ def get_cached_query(query, ttl=3600):
     try:
         # Cache the result for exactly 1 hour
         redis_client.setex(cache_key, 3600, pickle.dumps(df))
-        # Update last refresh time in Redis
-        redis_client.set('last_refresh_time', datetime.now().isoformat())
     except redis.RedisError:
         print("Redis error while caching, continuing without cache")
     
     return df
-
-def get_last_refresh_time():
-    """Get the last refresh time from Redis or return current time if not found"""
-    if not redis_available:
-        return datetime.now()
-    
-    try:
-        last_refresh_str = redis_client.get('last_refresh_time')
-        if last_refresh_str:
-            return datetime.fromisoformat(last_refresh_str.decode())
-    except (redis.RedisError, ValueError):
-        return datetime.now()
 
 # Initialize GCP client with credentials from Streamlit secrets
 try:
@@ -106,17 +72,6 @@ except Exception as e:
     st.error(str(e))
     st.stop()
 
-
-# Replace the existing run_query function
-def run_query(query):
-    """Run a query and return a dataframe"""
-    try:
-        return get_cached_query(query)
-    except Exception as e:
-        st.error(f"Error executing query: {str(e)}")
-        return pd.DataFrame()
-
-
 # Set page config
 st.set_page_config(page_title="Kings Cross Tube Prediction Analysis", layout="wide")
 
@@ -129,10 +84,8 @@ SELECT
 count_df = get_cached_query(count_query)  # Same 1-hour cache as everything else
 total_count = count_df['total_count'].iloc[0]
 
-# Display refresh info and counts
-last_refresh = get_last_refresh_time()
-last_refresh = (last_refresh + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
-st.info(f"Data refreshes every hour. Last refreshed: {last_refresh} | Total observations: {total_count:,}")
+# Display info
+st.info(f"Data refreshes every hour | Total observations: {total_count:,}")
 
 # Create tabs
 tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13 = st.tabs([
@@ -396,7 +349,7 @@ with tab1:
     FROM `nico-playground-384514.transport_predictions.any_errors`
     """
     
-    accuracy_results = run_query(accuracy_query)
+    accuracy_results = get_cached_query(accuracy_query)
     
     if not accuracy_results.empty:
         col1, col2 = st.columns(2)
@@ -458,7 +411,7 @@ with tab1:
     ORDER BY e.timestamp
     """
     
-    df = run_query(query)
+    df = get_cached_query(query)
     
     if not df.empty:
         # Add train_id filter
@@ -884,7 +837,7 @@ with tab2:
     FROM `nico-playground-384514.transport_predictions.initial_errors`
     """
     
-    accuracy_results = run_query(accuracy_query)
+    accuracy_results = get_cached_query(accuracy_query)
     
     if not accuracy_results.empty:
         col1, col2 = st.columns(2)
@@ -917,7 +870,7 @@ with tab2:
     ORDER BY direction, line
     """
     
-    initial_direction_results = run_query(initial_direction_query)
+    initial_direction_results = get_cached_query(initial_direction_query)
     
     if initial_direction_results.empty:
         st.warning("No data available for analysis")
@@ -1224,7 +1177,7 @@ with tab3:
         ORDER BY accuracy_percentage DESC
         """
         
-        line_df = run_query(line_query)
+        line_df = get_cached_query(line_query)
         
         if not line_df.empty:
             # Line performance bar chart
@@ -1257,7 +1210,7 @@ with tab3:
             ORDER BY hour
             """
             
-            time_df = run_query(time_query)
+            time_df = get_cached_query(time_query)
             
             if not time_df.empty:
                 fig = px.line(
@@ -1291,7 +1244,7 @@ with tab3:
         ORDER BY accuracy_percentage DESC
         """
         
-        line_df = run_query(line_query)
+        line_df = get_cached_query(line_query)
         
         if not line_df.empty:
             # Line performance bar chart
@@ -1323,7 +1276,7 @@ with tab3:
             ORDER BY hour
             """
             
-            time_df = run_query(time_query)
+            time_df = get_cached_query(time_query)
             
             if not time_df.empty:
                 fig = px.line(
@@ -1358,7 +1311,7 @@ with tab3:
         ORDER BY day_of_week
         """
         
-        day_df = run_query(day_query)
+        day_df = get_cached_query(day_query)
         
         if not day_df.empty:
             # Create a mapping of day numbers to names
@@ -1401,7 +1354,7 @@ with tab3:
         ORDER BY day_of_week
         """
         
-        day_df = run_query(day_query)
+        day_df = get_cached_query(day_query)
         
         if not day_df.empty:
             # Create a mapping of day numbers to names
@@ -1448,7 +1401,7 @@ with tab3:
             ORDER BY line, day_of_week
             """
 
-    day_line_df = run_query(day_line_query)
+    day_line_df = get_cached_query(day_line_query)
     
     if not day_line_df.empty:
         # Convert numeric columns to float
@@ -1612,7 +1565,7 @@ with tab4:
         line
     """
     
-    precision_df = run_query(precision_query)
+    precision_df = get_cached_query(precision_query)
     
     if not precision_df.empty:
         # Create a line chart showing accuracy by time bin (±30s)
@@ -1779,7 +1732,7 @@ with tab5:
     ORDER BY line, total_predictions DESC
     """
     
-    location_df = run_query(location_query)
+    location_df = get_cached_query(location_query)
     
     if not location_df.empty:
         # Create a line selector
@@ -1964,7 +1917,7 @@ with tab6:
     ORDER BY line, direction
     """
     
-    direction_df = run_query(direction_query)
+    direction_df = get_cached_query(direction_query)
     
     if not direction_df.empty:
         # Create a line selector
@@ -2075,7 +2028,7 @@ with tab7:
         line
     """
     
-    peak_df = run_query(peak_query)
+    peak_df = get_cached_query(peak_query)
     
     if not peak_df.empty:
         # Create a grouped bar chart showing accuracy by time period and line
@@ -2181,7 +2134,7 @@ with tab8:
     ORDER BY line, error_type
     """
     
-    error_df = run_query(error_pattern_query)
+    error_df = get_cached_query(error_pattern_query)
     
     if not error_df.empty:
         # Create stacked bar chart for error types by line
