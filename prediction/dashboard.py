@@ -20,7 +20,7 @@ redis_pool = redis.ConnectionPool(
     retry_on_timeout=True,
     health_check_interval=30,
     decode_responses=False,
-    ssl=True  # Enable SSL for Redis Cloud
+    ssl_cert_reqs=None  # Use this instead of ssl=True for Redis Cloud
 )
 
 # Initialize in-memory cache
@@ -1482,7 +1482,7 @@ with tab3:
             'accuracy_percentage_60s': 'mean',
             'avg_error': 'first',
             'avg_abs_error': 'first',
-            'count': 'sum'
+            'total_predictions': 'sum'  # Changed from 'count' to 'total_predictions'
         }).reset_index()
         
         
