@@ -96,7 +96,8 @@ def get_cached_query(query):
         if redis_client is not None:
             try:
                 # Cache for 1 hour
-                redis_client.setex(cache_key, 3600, result.to_json(orient='records'))
+                json_str = result.to_json(orient='records', date_format='iso')
+                redis_client.setex(cache_key, 3600, json_str)
                 st.info("Cached result in Redis")
             except Exception as e:
                 st.warning(f"Failed to cache: {str(e)}")
