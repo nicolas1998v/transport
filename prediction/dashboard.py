@@ -9,6 +9,8 @@ from datetime import datetime, timedelta
 import os
 from urllib.parse import urlparse
 import redis
+from datetime import datetime
+import hashlib
 
 # Initialize GCP client with credentials from Streamlit secrets
 try:
@@ -25,12 +27,94 @@ except Exception as e:
     st.error(str(e))
     st.stop()
 
+# Initialize Redis connection
+redis_client = None
+try:
+    host = "redis-16505.c335.europe-west2-1.gce.redns.redis-cloud.com"
+    port = 16505
+    password = "TK0d2LZXE1umqarhMIM1tJsWD7LVHNdg"
+    
+    st.info(f"Connecting to Redis at {host}:{port}")
+    
+    # Try connecting without SSL first
+    redis_client = redis.Redis(
+        host=host,
+        port=port,
+        password=password,
+        ssl=False,  # Try without SSL first
+        decode_responses=True,  # This will decode bytes to strings automatically
+        socket_timeout=5,
+        socket_connect_timeout=5
+    )
+    
+    if redis_client.ping():
+        st.success("Successfully connected to Redis without SSL")
+    else:
+        st.error("Failed to connect to Redis without SSL")
+        redis_client = None
+except Exception as e:
+    st.error(f"Error connecting to Redis without SSL: {str(e)}")
+    try:
+        # If that fails, try with SSL
+        redis_client = redis.Redis(
+            host=host,
+            port=port,
+            password=password,
+            ssl=True,
+            ssl_cert_reqs=None,
+            decode_responses=True,  # This will decode bytes to strings automatically
+            socket_timeout=5,
+            socket_connect_timeout=5
+        )
+        
+        if redis_client.ping():
+            st.success("Successfully connected to Redis with SSL")
+        else:
+            st.error("Failed to connect to Redis with SSL")
+            redis_client = None
+    except Exception as e:
+        st.error(f"Error connecting to Redis with SSL: {str(e)}")
+        redis_client = None
 
-@st.cache_data(ttl=3600)  # Fallback cache for 1 hour
-def run_query(query):
-    """Execute a BigQuery query with Streamlit caching."""
-    return client.query(query).to_dataframe()# Set page config
+def get_cache_key(query):
+    """Generate a consistent cache key for a query."""
+    return f"query:{hashlib.md5(query.encode()).hexdigest()}"
 
+def get_cached_query(query):
+    """Try Redis first, fall back to direct query if Redis fails."""
+    try:
+        cache_key = get_cache_key(query)
+        
+        # Try Redis first
+        if redis_client is not None:
+            try:
+                cached_result = redis_client.get(cache_key)
+                if cached_result is not None:
+                    st.success(f"Cache HIT at {datetime.now().strftime('%H:%M:%S')}")
+                    return pd.read_json(cached_result)
+            except Exception as e:
+                st.warning(f"Redis error: {str(e)}")
+        
+        # If Redis fails or no cache hit, execute query
+        st.warning(f"Cache MISS at {datetime.now().strftime('%H:%M:%S')} - executing query")
+        result = client.query(query).to_dataframe()
+        
+        # Try to cache in Redis for next time
+        if redis_client is not None:
+            try:
+                # Cache for 1 hour
+                redis_client.setex(cache_key, 3600, result.to_json())
+                st.info("Cached result in Redis")
+            except Exception as e:
+                st.warning(f"Failed to cache: {str(e)}")
+        
+        return result
+        
+    except Exception as e:
+        st.error(f"Error executing query: {str(e)}")
+        raise
+
+# Set page config
 st.set_page_config(page_title="Kings Cross Tube Prediction Analysis", layout="wide")
 
 # Get counts from both tables
@@ -39,7 +123,7 @@ SELECT
     (SELECT COUNT(*) FROM `nico-playground-384514.transport_predictions.initial_errors`) +
     (SELECT COUNT(*) FROM `nico-playground-384514.transport_predictions.any_errors`) as total_count
 """
-count_df = run_query(count_query)  # Same 1-hour cache as everything else
+count_df = get_cached_query(count_query)  # Same 1-hour cache as everything else
 total_count = count_df['total_count'].iloc[0]
 
 # Display info
@@ -307,7 +391,7 @@ with tab1:
     FROM `nico-playground-384514.transport_predictions.any_errors`
     """
     
-    accuracy_results = run_query(accuracy_query)
+    accuracy_results = get_cached_query(accuracy_query)
     
     if not accuracy_results.empty:
         col1, col2 = st.columns(2)
@@ -369,7 +453,7 @@ with tab1:
     ORDER BY e.timestamp
     """
     
-    df = run_query(query)
+    df = get_cached_query(query)
     
     if not df.empty:
         # Add train_id filter
@@ -795,7 +879,7 @@ with tab2:
     FROM `nico-playground-384514.transport_predictions.initial_errors`
     """
     
-    accuracy_results = run_query(accuracy_query)
+    accuracy_results = get_cached_query(accuracy_query)
     
     if not accuracy_results.empty:
         col1, col2 = st.columns(2)
@@ -828,7 +912,7 @@ with tab2:
     ORDER BY direction, line
     """
     
-    initial_direction_results = run_query(initial_direction_query)
+    initial_direction_results = get_cached_query(initial_direction_query)
     
     if initial_direction_results.empty:
         st.warning("No data available for analysis")
@@ -1135,7 +1219,7 @@ with tab3:
         ORDER BY accuracy_percentage DESC
         """
         
-        line_df = run_query(line_query)
+        line_df = get_cached_query(line_query)
         
         if not line_df.empty:
             # Line performance bar chart
@@ -1168,7 +1252,7 @@ with tab3:
             ORDER BY hour
             """
             
-            time_df = run_query(time_query)
+            time_df = get_cached_query(time_query)
             
             if not time_df.empty:
                 fig = px.line(
@@ -1202,7 +1286,7 @@ with tab3:
         ORDER BY accuracy_percentage DESC
         """
         
-        line_df = run_query(line_query)
+        line_df = get_cached_query(line_query)
         
         if not line_df.empty:
             # Line performance bar chart
@@ -1234,7 +1318,7 @@ with tab3:
             ORDER BY hour
             """
             
-            time_df = run_query(time_query)
+            time_df = get_cached_query(time_query)
             
             if not time_df.empty:
                 fig = px.line(
@@ -1269,7 +1353,7 @@ with tab3:
         ORDER BY day_of_week
         """
         
-        day_df = run_query(day_query)
+        day_df = get_cached_query(day_query)
         
         if not day_df.empty:
             # Create a mapping of day numbers to names
@@ -1312,7 +1396,7 @@ with tab3:
         ORDER BY day_of_week
         """
         
-        day_df = run_query(day_query)
+        day_df = get_cached_query(day_query)
         
         if not day_df.empty:
             # Create a mapping of day numbers to names
@@ -1359,7 +1443,7 @@ with tab3:
             ORDER BY line, day_of_week
             """
 
-    day_line_df = run_query(day_line_query)
+    day_line_df = get_cached_query(day_line_query)
     
     if not day_line_df.empty:
         # Convert numeric columns to float
@@ -1523,7 +1607,7 @@ with tab4:
         line
     """
     
-    precision_df = run_query(precision_query)
+    precision_df = get_cached_query(precision_query)
     
     if not precision_df.empty:
         # Create a line chart showing accuracy by time bin (±30s)
@@ -1690,7 +1774,7 @@ with tab5:
     ORDER BY line, total_predictions DESC
     """
     
-    location_df = run_query(location_query)
+    location_df = get_cached_query(location_query)
     
     if not location_df.empty:
         # Create a line selector
@@ -1875,7 +1959,7 @@ with tab6:
     ORDER BY line, direction
     """
     
-    direction_df = run_query(direction_query)
+    direction_df = get_cached_query(direction_query)
     
     if not direction_df.empty:
         # Create a line selector
@@ -1986,7 +2070,7 @@ with tab7:
         line
     """
     
-    peak_df = run_query(peak_query)
+    peak_df = get_cached_query(peak_query)
     
     if not peak_df.empty:
         # Create a grouped bar chart showing accuracy by time period and line
@@ -2092,7 +2176,7 @@ with tab8:
     ORDER BY line, error_type
     """
     
-    error_df = run_query(error_pattern_query)
+    error_df = get_cached_query(error_pattern_query)
     
     if not error_df.empty:
         # Create stacked bar chart for error types by line
@@ -2165,7 +2249,7 @@ with tab9:
     ORDER BY date, line
     """
     
-    drift_df = run_query(drift_query)
+    drift_df = get_cached_query(drift_query)
     
     if not drift_df.empty:
         # Create line chart for accuracy over time
@@ -2280,8 +2364,8 @@ with tab10:
     ORDER BY date
     """
     
-    stats_df = run_query(stats_query)
-    anomaly_df = run_query(anomaly_query)
+    stats_df = get_cached_query(stats_query)
+    anomaly_df = get_cached_query(anomaly_query)
     
     if not anomaly_df.empty:
         # Create scatter plot for anomalies
@@ -2402,7 +2486,7 @@ with tab11:
     ORDER BY interaction_count DESC
     """
     
-    interaction_df = run_query(interaction_query)
+    interaction_df = get_cached_query(interaction_query)
     
     if not interaction_df.empty:
         # Create heatmap for line interactions
@@ -2498,7 +2582,7 @@ with tab12:
     ORDER BY w.timestamp DESC
     """
     
-    weather_df = run_query(weather_query)
+    weather_df = get_cached_query(weather_query)
     
     if not weather_df.empty:
         # First row: Bar plots for weather condition and temperature bins
@@ -2801,7 +2885,7 @@ with tab13:
     CROSS JOIN anomaly_counts a
     ORDER BY date, hour, line
     """
-    event_df = run_query(event_query)
+    event_df = get_cached_query(event_query)
     
     if not event_df.empty:
         # Check if we have any event days
