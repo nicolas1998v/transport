@@ -25,72 +25,12 @@ except Exception as e:
     st.error(str(e))
     st.stop()
 
-# Initialize Redis connection
-redis_client = None
-try:
-    redis_url = "redis-16505.c335.europe-west2-1.gce.redns.redis-cloud.com:16505"
-    redis_password = "TK0d2LZXE1umqarhMIM1tJsWD7LVHNdg"
-    
-    # Parse the Redis URL to get host and port
-    host = "redis-16505.c335.europe-west2-1.gce.redns.redis-cloud.com"
-    port = 16505
-    
-    print(f"Connecting to Redis at {host}:{port}")
-    
-    # Create Redis client with SSL
-    redis_client = redis.Redis(
-        host=host,
-        port=port,
-        password=redis_password,
-        ssl=True,
-        ssl_cert_reqs=None,  # Don't verify SSL certificate
-        decode_responses=False  # Keep as bytes for JSON serialization
-    )
-    
-    # Test connection
-    if redis_client.ping():
-        print("Successfully connected to Redis")
-    else:
-        print("Failed to connect to Redis")
-        redis_client = None
-except Exception as e:
-    print(f"Error connecting to Redis: {str(e)}")
-    redis_client = None
 
 @st.cache_data(ttl=3600)  # Fallback cache for 1 hour
 def run_query(query):
     """Execute a BigQuery query with Streamlit caching."""
-    return client.query(query).to_dataframe()
+    return client.query(query).to_dataframe()# Set page config
 
-def get_cached_query(query):
-    """Try Redis first, fall back to Streamlit cache if Redis fails."""
-    try:
-        # Try Redis first
-        if redis_client is not None:
-            try:
-                cached_result = redis_client.get(hash(query))
-                if cached_result is not None:
-                    return pd.read_json(cached_result)
-            except Exception:
-                pass  # Fall through to Streamlit cache
-        
-        # If Redis fails or no cache hit, use Streamlit cache
-        result = run_query(query)
-        
-        # Try to cache in Redis for next time
-        if redis_client is not None:
-            try:
-                redis_client.setex(hash(query), 3600, result.to_json())
-            except Exception:
-                pass  # Ignore Redis errors, we still have Streamlit cache
-        
-        return result
-        
-    except Exception as e:
-        print(f"Error executing query: {str(e)}")
-        raise
-
-# Set page config
 st.set_page_config(page_title="Kings Cross Tube Prediction Analysis", layout="wide")
 
 # Get counts from both tables
@@ -99,7 +39,7 @@ SELECT
     (SELECT COUNT(*) FROM `nico-playground-384514.transport_predictions.initial_errors`) +
     (SELECT COUNT(*) FROM `nico-playground-384514.transport_predictions.any_errors`) as total_count
 """
-count_df = get_cached_query(count_query)  # Same 1-hour cache as everything else
+count_df = run_query(count_query)  # Same 1-hour cache as everything else
 total_count = count_df['total_count'].iloc[0]
 
 # Display info
@@ -367,7 +307,7 @@ with tab1:
     FROM `nico-playground-384514.transport_predictions.any_errors`
     """
     
-    accuracy_results = get_cached_query(accuracy_query)
+    accuracy_results = run_query(accuracy_query)
     
     if not accuracy_results.empty:
         col1, col2 = st.columns(2)
@@ -429,7 +369,7 @@ with tab1:
     ORDER BY e.timestamp
     """
     
-    df = get_cached_query(query)
+    df = run_query(query)
     
     if not df.empty:
         # Add train_id filter
@@ -855,7 +795,7 @@ with tab2:
     FROM `nico-playground-384514.transport_predictions.initial_errors`
     """
     
-    accuracy_results = get_cached_query(accuracy_query)
+    accuracy_results = run_query(accuracy_query)
     
     if not accuracy_results.empty:
         col1, col2 = st.columns(2)
@@ -888,7 +828,7 @@ with tab2:
     ORDER BY direction, line
     """
     
-    initial_direction_results = get_cached_query(initial_direction_query)
+    initial_direction_results = run_query(initial_direction_query)
     
     if initial_direction_results.empty:
         st.warning("No data available for analysis")
@@ -1195,7 +1135,7 @@ with tab3:
         ORDER BY accuracy_percentage DESC
         """
         
-        line_df = get_cached_query(line_query)
+        line_df = run_query(line_query)
         
         if not line_df.empty:
             # Line performance bar chart
@@ -1228,7 +1168,7 @@ with tab3:
             ORDER BY hour
             """
             
-            time_df = get_cached_query(time_query)
+            time_df = run_query(time_query)
             
             if not time_df.empty:
                 fig = px.line(
@@ -1262,7 +1202,7 @@ with tab3:
         ORDER BY accuracy_percentage DESC
         """
         
-        line_df = get_cached_query(line_query)
+        line_df = run_query(line_query)
         
         if not line_df.empty:
             # Line performance bar chart
@@ -1294,7 +1234,7 @@ with tab3:
             ORDER BY hour
             """
             
-            time_df = get_cached_query(time_query)
+            time_df = run_query(time_query)
             
             if not time_df.empty:
                 fig = px.line(
@@ -1329,7 +1269,7 @@ with tab3:
         ORDER BY day_of_week
         """
         
-        day_df = get_cached_query(day_query)
+        day_df = run_query(day_query)
         
         if not day_df.empty:
             # Create a mapping of day numbers to names
@@ -1372,7 +1312,7 @@ with tab3:
         ORDER BY day_of_week
         """
         
-        day_df = get_cached_query(day_query)
+        day_df = run_query(day_query)
         
         if not day_df.empty:
             # Create a mapping of day numbers to names
@@ -1419,7 +1359,7 @@ with tab3:
             ORDER BY line, day_of_week
             """
 
-    day_line_df = get_cached_query(day_line_query)
+    day_line_df = run_query(day_line_query)
     
     if not day_line_df.empty:
         # Convert numeric columns to float
@@ -1447,7 +1387,7 @@ with tab3:
         all_days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
         
         # First aggregate any duplicate entries - use first() for error metrics
-        agg_df = day_line_df.groupby(['line', 'day_name'], observed=True).agg({
+        agg_df = day_line_df.groupby(('line', 'day_name'), observed=True).agg({
             'total_predictions': 'sum',
             'accuracy_percentage': 'mean',
             'accuracy_percentage_60s': 'mean',
@@ -1584,7 +1524,7 @@ with tab4:
         line
     """
     
-    precision_df = get_cached_query(precision_query)
+    precision_df = run_query(precision_query)
     
     if not precision_df.empty:
         # Create a line chart showing accuracy by time bin (±30s)
@@ -1751,7 +1691,7 @@ with tab5:
     ORDER BY line, total_predictions DESC
     """
     
-    location_df = get_cached_query(location_query)
+    location_df = run_query(location_query)
     
     if not location_df.empty:
         # Create a line selector
@@ -1936,7 +1876,7 @@ with tab6:
     ORDER BY line, direction
     """
     
-    direction_df = get_cached_query(direction_query)
+    direction_df = run_query(direction_query)
     
     if not direction_df.empty:
         # Create a line selector
@@ -2047,7 +1987,7 @@ with tab7:
         line
     """
     
-    peak_df = get_cached_query(peak_query)
+    peak_df = run_query(peak_query)
     
     if not peak_df.empty:
         # Create a grouped bar chart showing accuracy by time period and line
@@ -2153,7 +2093,7 @@ with tab8:
     ORDER BY line, error_type
     """
     
-    error_df = get_cached_query(error_pattern_query)
+    error_df = run_query(error_pattern_query)
     
     if not error_df.empty:
         # Create stacked bar chart for error types by line
@@ -2226,7 +2166,7 @@ with tab9:
     ORDER BY date, line
     """
     
-    drift_df = get_cached_query(drift_query)
+    drift_df = run_query(drift_query)
     
     if not drift_df.empty:
         # Create line chart for accuracy over time
@@ -2341,8 +2281,8 @@ with tab10:
     ORDER BY date
     """
     
-    stats_df = get_cached_query(stats_query)
-    anomaly_df = get_cached_query(anomaly_query)
+    stats_df = run_query(stats_query)
+    anomaly_df = run_query(anomaly_query)
     
     if not anomaly_df.empty:
         # Create scatter plot for anomalies
@@ -2399,7 +2339,7 @@ with tab10:
         st.subheader("Summary Statistics by Line")
         
         # Calculate statistics per line
-        line_stats = anomaly_df.groupby('line', observed=True).agg({
+        line_stats = anomaly_df.groupby(('line',), observed=True).agg({
             'avg_error': ['mean', 'std'],
             'accuracy_percentage': 'mean',
             'total_predictions': 'sum'
@@ -2463,7 +2403,7 @@ with tab11:
     ORDER BY interaction_count DESC
     """
     
-    interaction_df = get_cached_query(interaction_query)
+    interaction_df = run_query(interaction_query)
     
     if not interaction_df.empty:
         # Create heatmap for line interactions
@@ -2559,7 +2499,7 @@ with tab12:
     ORDER BY w.timestamp DESC
     """
     
-    weather_df = get_cached_query(weather_query)
+    weather_df = run_query(weather_query)
     
     if not weather_df.empty:
         # First row: Bar plots for weather condition and temperature bins
@@ -2862,7 +2802,7 @@ with tab13:
     CROSS JOIN anomaly_counts a
     ORDER BY date, hour, line
     """
-    event_df = get_cached_query(event_query)
+    event_df = run_query(event_query)
     
     if not event_df.empty:
         # Check if we have any event days
