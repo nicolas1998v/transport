@@ -9,21 +9,25 @@ from google.oauth2 import service_account
 
 # Initialize Redis client with error handling
 try:
-    redis_client = redis.Redis(host='127.0.0.1', port=6379, db=0)
+    redis_client = redis.Redis(
+        host='127.0.0.1',
+        port=6379,
+        db=0,
+        socket_timeout=5,
+        socket_connect_timeout=5
+    )
+    # Test connection
+    redis_client.ping()
     redis_available = True
     print("Successfully connected to Redis")
-except (redis.ConnectionError, redis.TimeoutError) as e:
+except Exception as e:
     print(f"Redis connection error: {str(e)}")
     print("Falling back to direct BigQuery queries")
-    redis_available = False
-except Exception as e:
-    print(f"Unexpected error connecting to Redis: {str(e)}")
     redis_available = False
 
 def get_cached_query(query, ttl=3600):
     """Get query results from cache or execute and cache if not found"""
     if not redis_available:
-        # If Redis is not available, just execute the query directly
         print("Redis not available, executing query directly")
         result = client.query(query).result()
         df = result.to_dataframe()
@@ -31,6 +35,7 @@ def get_cached_query(query, ttl=3600):
     
     # Create a unique key for this query
     cache_key = f"query:{hash(query)}"
+    print(f"Checking cache for key: {cache_key}")
     
     try:
         # Try to get from cache
@@ -38,22 +43,27 @@ def get_cached_query(query, ttl=3600):
         if cached_result:
             print("Cache hit! Using cached results")
             return pickle.loads(cached_result)
-    except redis.RedisError:
-        print("Redis error, executing query directly")
+        else:
+            print("Cache miss! No data found in Redis")
+    except redis.RedisError as e:
+        print(f"Redis error: {str(e)}")
+        print("Executing query directly")
         result = client.query(query).result()
         df = result.to_dataframe()
         return df
     
     # If not in cache, execute query
-    print("Cache miss! Executing query")
+    print("Executing query and caching results")
     result = client.query(query).result()
     df = result.to_dataframe()
     
     try:
         # Cache the result for exactly 1 hour
         redis_client.setex(cache_key, 3600, pickle.dumps(df))
-    except redis.RedisError:
-        print("Redis error while caching, continuing without cache")
+        print("Successfully cached results")
+    except redis.RedisError as e:
+        print(f"Redis error while caching: {str(e)}")
+        print("Continuing without cache")
     
     return df
 
@@ -2207,7 +2217,7 @@ with tab9:
     ORDER BY date, line
     """
     
-    drift_df = run_query(drift_query)
+    drift_df = get_cached_query(drift_query)
     
     if not drift_df.empty:
         # Create line chart for accuracy over time
@@ -2321,8 +2331,8 @@ with tab10:
     ORDER BY date
     """
     
-    stats_df = run_query(stats_query)
-    anomaly_df = run_query(anomaly_query)
+    stats_df = get_cached_query(stats_query)
+    anomaly_df = get_cached_query(anomaly_query)
     
     if not anomaly_df.empty:
         # Create scatter plot for anomalies
@@ -2442,7 +2452,7 @@ with tab11:
     ORDER BY interaction_count DESC
     """
     
-    interaction_df = run_query(interaction_query)
+    interaction_df = get_cached_query(interaction_query)
     
     if not interaction_df.empty:
         # Create heatmap for line interactions
@@ -2538,7 +2548,7 @@ with tab12:
     ORDER BY w.timestamp DESC
     """
     
-    weather_df = run_query(weather_query)
+    weather_df = get_cached_query(weather_query)
     
     if not weather_df.empty:
         # First row: Bar plots for weather condition and temperature bins
@@ -2841,7 +2851,7 @@ with tab13:
     CROSS JOIN anomaly_counts a
     ORDER BY date, hour, line
     """
-    event_df = run_query(event_query)
+    event_df = get_cached_query(event_query)
     
     if not event_df.empty:
         # Check if we have any event days
