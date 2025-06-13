@@ -11,10 +11,10 @@ import os
 
 # Initialize Redis connection pool
 redis_pool = redis.ConnectionPool(
-    host='redis-16493.c335.europe-west2-1.gce.redns.redis-cloud.com',
-    port=16493,
+    host='redis-18505.c335.europe-west2-1.gce.redns.redis-cloud.com',
+    port=18505,
     db=0,
-    socket_timeout=5,  # Increased timeout
+    socket_timeout=5,
     socket_connect_timeout=5,
     retry_on_timeout=True,
     health_check_interval=30,
@@ -33,7 +33,7 @@ def get_cached_query(query, cache_key_prefix='query'):
     
     # First try Redis
     try:
-        print(f"Attempting to connect to Redis at redis-16493.c335.europe-west2-1.gce.redns.redis-cloud.com:16493...")
+        print(f"Attempting to connect to Redis Cloud at redis-18505.c335.europe-west2-1.gce.redns.redis-cloud.com:18505...")
         # Get connection from pool
         redis_client = redis.Redis(connection_pool=redis_pool)
         
