@@ -1477,12 +1477,13 @@ with tab3:
         all_lines = sorted(day_line_df['line'].unique())
         all_days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
         
-        # First aggregate any duplicate entries - use first() for error values
+        # First aggregate any duplicate entries - use first() for error metrics
         agg_df = day_line_df.groupby(['line', 'day_name'], observed=True).agg({
+            'total_predictions': 'sum',
             'accuracy_percentage': 'mean',
             'accuracy_percentage_60s': 'mean',
             'avg_error': 'first',
-            'avg_abs_error': 'first',
+            'avg_abs_error': 'first'
         }).reset_index()
         
         
@@ -2432,7 +2433,7 @@ with tab10:
         line_stats = anomaly_df.groupby('line', observed=True).agg({
             'avg_error': ['mean', 'std'],
             'accuracy_percentage': 'mean',
-            'count': 'sum'
+            'total_predictions': 'sum'
         }).reset_index()
         
         # Rename columns for clarity
@@ -2634,8 +2635,7 @@ with tab12:
                 'accuracy_percentage': 'mean',
                 'total_predictions': 'sum',
                 'avg_error': lambda x: round(x.mean(), 1),
-                'avg_abs_error': lambda x: round(x.mean(), 1),
-                'count': 'sum'
+                'avg_abs_error': lambda x: round(x.mean(), 1)
             }).reset_index()
             
             temp_bin_stats['display_bin'] = temp_bin_stats['temp_bin'].map(display_labels)
@@ -2666,8 +2666,7 @@ with tab12:
                 'accuracy_percentage': 'mean',
                 'total_predictions': 'sum',
                 'avg_error': lambda x: round(x.mean(), 1),
-                'avg_abs_error': lambda x: round(x.mean(), 1),
-                'count': 'sum'
+                'avg_abs_error': lambda x: round(x.mean(), 1)
             }).reset_index()
             
             fig = px.bar(
@@ -2692,8 +2691,7 @@ with tab12:
                 'accuracy_percentage': 'mean',
                 'total_predictions': 'sum',
                 'avg_error': lambda x: round(x.mean(), 1),
-                'avg_abs_error': lambda x: round(x.mean(), 1),
-                'count': 'sum'
+                'avg_abs_error': lambda x: round(x.mean(), 1)
             }).reset_index()
             
             fig = px.bar(
