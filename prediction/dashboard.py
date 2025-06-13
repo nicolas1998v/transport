@@ -7,77 +7,102 @@ import redis
 import pickle
 from google.oauth2 import service_account
 from datetime import datetime, timedelta
+import os
 
-# Initialize Redis client with error handling
-try:
-    redis_client = redis.Redis(
-        host='127.0.0.1',
-        port=6379,
-        db=0,
-        socket_timeout=5,
-        socket_connect_timeout=5
-    )
-    # Test connection
-    redis_client.ping()
-    redis_available = True
-    print("Successfully connected to Redis")
-except Exception as e:
-    print(f"Redis connection error: {str(e)}")
-    print("Falling back to in-memory cache")
-    redis_available = False
+# Initialize Redis connection pool
+redis_pool = redis.ConnectionPool(
+    host='redis-16493.c335.europe-west2-1.gce.redns.redis-cloud.com',
+    port=16493,
+    db=0,
+    socket_timeout=5,  # Increased timeout
+    socket_connect_timeout=5,
+    retry_on_timeout=True,
+    health_check_interval=30,
+    decode_responses=False
+)
 
-# Simple in-memory cache as fallback
+# Initialize in-memory cache
 memory_cache = {}
 CACHE_TTL = 3600  # 1 hour in seconds
 
-def get_cached_query(query, ttl=CACHE_TTL):
-    """Get query results from cache or execute and cache if not found"""
-    # Create a unique key for this query
-    cache_key = f"query:{hash(query)}"
-    print(f"Checking cache for key: {cache_key}")
+def get_cached_query(query, cache_key_prefix='query'):
+    """Get query results from cache or execute if not cached"""
+    # Generate cache key
+    cache_key = f"{cache_key_prefix}:{hash(query)}"
+    print(f"Generated cache key: {cache_key}")
     
-    # First try Redis if available
-    if redis_available:
+    # First try Redis
+    try:
+        print(f"Attempting to connect to Redis at redis-16493.c335.europe-west2-1.gce.redns.redis-cloud.com:16493...")
+        # Get connection from pool
+        redis_client = redis.Redis(connection_pool=redis_pool)
+        
+        # Test connection with detailed error handling
         try:
-            cached_result = redis_client.get(cache_key)
-            if cached_result:
-                print("Redis cache hit! Using cached results")
-                return pickle.loads(cached_result)
+            print("Testing Redis connection...")
+            if not redis_client.ping():
+                print("Redis server is not responding")
+                raise redis.ConnectionError("Redis not responding")
+        except redis.AuthenticationError as e:
+            print(f"Authentication error: {str(e)}")
+            raise
+        except redis.ConnectionError as e:
+            print(f"Connection error: {str(e)}")
+            raise
+            
+        print("Redis connection successful")
+        
+        # Try to get from Redis
+        print("Attempting to get cached result from Redis...")
+        cached_result = redis_client.get(cache_key)
+        if cached_result:
+            print(f"Redis cache hit for key: {cache_key}")
+            return pd.read_pickle(cached_result)
+            
+        print(f"Redis cache miss for key: {cache_key}")
+        # Execute query
+        print("Executing query...")
+        result = client.query(query).to_dataframe()
+        
+        # Cache result in Redis
+        try:
+            print("Attempting to cache result in Redis...")
+            redis_client.setex(
+                cache_key,
+                timedelta(hours=1),
+                pd.to_pickle(result)
+            )
+            print(f"Successfully cached in Redis")
+        except Exception as e:
+            print(f"Failed to cache in Redis: {str(e)}")
+            
+        return result
+        
+    except (redis.ConnectionError, redis.AuthenticationError) as e:
+        print(f"Redis error: {str(e)}")
+        print("Falling back to in-memory cache")
+        
+        # Try memory cache
+        if cache_key in memory_cache:
+            cached_time, cached_result = memory_cache[cache_key]
+            if datetime.now() - cached_time < timedelta(seconds=CACHE_TTL):
+                print(f"Memory cache hit for key: {cache_key}")
+                return cached_result
             else:
-                print("Redis cache miss")
-        except redis.RedisError as e:
-            print(f"Redis error: {str(e)}")
-            print("Falling back to memory cache")
-    
-    # If Redis fails or is not available, try memory cache
-    if cache_key in memory_cache:
-        cached_time, cached_result = memory_cache[cache_key]
-        if datetime.now() - cached_time < timedelta(seconds=ttl):
-            print("Memory cache hit! Using cached results")
-            return cached_result
-        else:
-            print("Memory cache expired")
-    
-    # If no cache hit, execute query
-    print("Cache miss! Executing query")
-    result = client.query(query).result()
-    df = result.to_dataframe()
-    
-    # Try to cache in Redis first
-    if redis_available:
-        try:
-            redis_client.setex(cache_key, ttl, pickle.dumps(df))
-            print("Successfully cached in Redis")
-        except redis.RedisError as e:
-            print(f"Redis caching error: {str(e)}")
-            print("Caching in memory instead")
-            memory_cache[cache_key] = (datetime.now(), df)
-    else:
+                print(f"Memory cache expired for key: {cache_key}")
+        
+        # If no cache hit, execute query
+        print("Executing query (no cache available)...")
+        result = client.query(query).to_dataframe()
+        
         # Cache in memory
-        memory_cache[cache_key] = (datetime.now(), df)
-        print("Successfully cached in memory")
-    
-    return df
+        memory_cache[cache_key] = (datetime.now(), result)
+        print(f"Successfully cached in memory")
+        
+        return result
+    except Exception as e:
+        print(f"Unexpected error: {str(e)}")
+        return client.query(query).to_dataframe()
 
 # Initialize GCP client with credentials from Streamlit secrets
 try:
@@ -649,7 +674,7 @@ with tab1:
         st.subheader("Inbound Statistics")
         st.write("3000 observations per line")
         # Sample 3000 predictions per line
-        sampled_data_inbound = inbound_data.groupby('line').apply(lambda x: x.sample(n=min(3000, len(x)), random_state=42)).reset_index(drop=True)
+        sampled_data_inbound = inbound_data.groupby('line', observed=True).apply(lambda x: x.sample(n=min(3000, len(x)), random_state=42), include_groups=False).reset_index(drop=True)
         col1, col2, col3 = st.columns(3)
         with col1:
                 st.metric("Average Error", f"{sampled_data_inbound['error_seconds'].mean():.0f} seconds")
@@ -746,7 +771,7 @@ with tab1:
         st.subheader("Outbound Statistics")
         st.write("3000 observations per line")
             # Sample 3000 predictions per line
-        sampled_data_outbound = outbound_data.groupby('line').apply(lambda x: x.sample(n=min(3000, len(x)), random_state=42)).reset_index(drop=True)
+        sampled_data_outbound = outbound_data.groupby('line', observed=True).apply(lambda x: x.sample(n=min(3000, len(x)), random_state=42), include_groups=False).reset_index(drop=True)
         col1, col2, col3 = st.columns(3)
         with col1:
                 st.metric("Average Error", f"{sampled_data_outbound['error_seconds'].mean():.0f} seconds")
@@ -947,7 +972,7 @@ with tab2:
         st.write("3000 observations per line")
         
         # Sample 1000 predictions per line
-        sampled_data_inbound = inbound_data.groupby('line').apply(lambda x: x.sample(n=min(300, len(x)), random_state=42)).reset_index(drop=True)
+        sampled_data_inbound = inbound_data.groupby('line', observed=True).apply(lambda x: x.sample(n=min(300, len(x)), random_state=42), include_groups=False).reset_index(drop=True)
         col1, col2, col3 = st.columns(3)
         with col1:
                 st.metric("Average Error", f"{sampled_data_inbound['error_seconds'].mean():.0f} seconds")
@@ -1085,7 +1110,7 @@ with tab2:
             st.subheader("Outbound Statistics")
             st.write("3000 observations per line")
             # Sample 3000 predictions per line
-            sampled_data_outbound = outbound_data.groupby('line').apply(lambda x: x.sample(n=min(3000, len(x)), random_state=42)).reset_index(drop=True)
+            sampled_data_outbound = outbound_data.groupby('line', observed=True).apply(lambda x: x.sample(n=min(3000, len(x)), random_state=42), include_groups=False).reset_index(drop=True)
             col1, col2, col3 = st.columns(3)
         with col1:
                 st.metric("Average Error", f"{sampled_data_outbound['error_seconds'].mean():.0f} seconds")
@@ -1450,11 +1475,12 @@ with tab3:
         all_days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
         
         # First aggregate any duplicate entries - use first() for error values
-        agg_df = day_line_df.groupby(['line', 'day_name']).agg({
+        agg_df = day_line_df.groupby(['line', 'day_name'], observed=True).agg({
             'accuracy_percentage': 'mean',
             'accuracy_percentage_60s': 'mean',
             'avg_error': 'first',
-            'avg_abs_error': 'first'
+            'avg_abs_error': 'first',
+            'count': 'sum'
         }).reset_index()
         
         
@@ -2083,10 +2109,11 @@ with tab7:
         st.subheader("Summary Statistics by Time Period")
         
         # Calculate overall statistics for each time period
-        period_stats = peak_df.groupby('time_period').agg({
+        period_stats = peak_df.groupby('time_period', observed=True).agg({
             'total_predictions': 'sum',
             'accuracy_percentage': 'mean',
-            'avg_error': lambda x: (x * peak_df.loc[x.index, 'total_predictions']).sum() / peak_df.loc[x.index, 'total_predictions'].sum()
+            'avg_error': lambda x: (x * peak_df.loc[x.index, 'total_predictions']).sum() / peak_df.loc[x.index, 'total_predictions'].sum(),
+            'count': 'sum'
         }).reset_index()
         
         # Display metrics in three columns
@@ -2254,7 +2281,7 @@ with tab9:
         
         with col1:
             # Calculate overall trend
-            overall_trend = drift_df.groupby('date')['accuracy_percentage'].mean().reset_index()
+            overall_trend = drift_df.groupby('date', observed=True)['accuracy_percentage'].mean().reset_index()
             if len(overall_trend) > 1:
                 first_week = overall_trend.head(7)['accuracy_percentage'].mean()
                 last_week = overall_trend.tail(7)['accuracy_percentage'].mean()
@@ -2267,13 +2294,14 @@ with tab9:
         
         with col2:
             # Most improved line
-            line_trends = drift_df.groupby('line').apply(
-                lambda x: x.tail(7)['accuracy_percentage'].mean() - x.head(7)['accuracy_percentage'].mean()
-            ).sort_values(ascending=False)
+            line_trends = drift_df.groupby('line', observed=True).apply(
+                lambda x: x.sort_values('date')['accuracy_percentage'].tolist(),
+                include_groups=False
+            ).reset_index()
             if not line_trends.empty:
                 st.metric(
                     "Most Improved Line",
-                    f"{line_trends.index[0]} ({line_trends.iloc[0]:+.1f}%)",
+                    f"{line_trends['line'][0]} ({line_trends['accuracy_percentage'][0]:+.1f}%)",
                     "Change in last 7 days vs previous 7 days"
                 )
 
@@ -2400,13 +2428,14 @@ with tab10:
         st.subheader("Summary Statistics by Line")
         
         # Calculate statistics per line
-        line_stats = anomaly_df.groupby('line').agg({
-            'avg_error': ['count', 'mean'],
-            'accuracy_percentage': 'mean'
+        line_stats = anomaly_df.groupby('line', observed=True).agg({
+            'avg_error': ['mean', 'std'],
+            'accuracy_percentage': 'mean',
+            'count': 'sum'
         }).reset_index()
         
         # Rename columns for clarity
-        line_stats.columns = ['Line', 'Number of Anomalies', 'Average Absolute Error (s)', 'Average Accuracy (%)']
+        line_stats.columns = ['Line', 'Average Absolute Error (s)', 'Average Accuracy (%)', 'Number of Anomalies']
         
         # Sort by number of anomalies
         line_stats = line_stats.sort_values('Number of Anomalies', ascending=False)
@@ -2567,8 +2596,8 @@ with tab12:
         
         with col1:
             # Weather Condition vs Accuracy
-            weather_accuracy = weather_df.groupby('weather_condition').agg({
-                'accuracy_percentage': lambda x: round(x.mean(), 1),
+            weather_accuracy = weather_df.groupby('weather_condition', observed=True).agg({
+                'accuracy_percentage': 'mean',
                 'total_predictions': 'sum',
                 'avg_error': lambda x: round((x * weather_df.loc[x.index, 'total_predictions']).sum() / weather_df.loc[x.index, 'total_predictions'].sum(), 1),
                 'avg_abs_error': lambda x: round((x * weather_df.loc[x.index, 'total_predictions']).sum() / weather_df.loc[x.index, 'total_predictions'].sum(), 1)
@@ -2600,11 +2629,12 @@ with tab12:
                                           bins=temp_bins,
                                           labels=temp_labels)
             
-            temp_bin_stats = weather_df.groupby('temp_bin').agg({
-                'accuracy_percentage': lambda x: round(x.mean(), 1),
+            temp_bin_stats = weather_df.groupby('temp_bin', observed=True).agg({
+                'accuracy_percentage': 'mean',
                 'total_predictions': 'sum',
                 'avg_error': lambda x: round(x.mean(), 1),
-                'avg_abs_error': lambda x: round(x.mean(), 1)
+                'avg_abs_error': lambda x: round(x.mean(), 1),
+                'count': 'sum'
             }).reset_index()
             
             temp_bin_stats['display_bin'] = temp_bin_stats['temp_bin'].map(display_labels)
@@ -2631,11 +2661,12 @@ with tab12:
                 bins=[-float('inf'), 5, 10, 15, 20, float('inf')],
                 labels=['0-5 mph', '5-10 mph', '10-15 mph', '15-20 mph', '20+ mph']
             )
-            wind_group = weather_df.groupby(wind_bins).agg({
-                'accuracy_percentage': lambda x: round(x.mean(), 1),
+            wind_group = weather_df.groupby(wind_bins, observed=True).agg({
+                'accuracy_percentage': 'mean',
                 'total_predictions': 'sum',
                 'avg_error': lambda x: round(x.mean(), 1),
-                'avg_abs_error': lambda x: round(x.mean(), 1)
+                'avg_abs_error': lambda x: round(x.mean(), 1),
+                'count': 'sum'
             }).reset_index()
             
             fig = px.bar(
@@ -2656,11 +2687,12 @@ with tab12:
                 bins=[-float('inf'), 0, 0.5, 2, 4, float('inf')],
                 labels=['No Rain', 'Light Rain (<0.5mm)', 'Moderate Rain (0.5-2mm)', 'Heavy Rain (2-4mm)', 'Very Heavy Rain (>4mm)']
             )
-            precip_group = weather_df.groupby(precip_bins).agg({
-                'accuracy_percentage': lambda x: round(x.mean(), 1),
+            precip_group = weather_df.groupby(precip_bins, observed=True).agg({
+                'accuracy_percentage': 'mean',
                 'total_predictions': 'sum',
                 'avg_error': lambda x: round(x.mean(), 1),
-                'avg_abs_error': lambda x: round(x.mean(), 1)
+                'avg_abs_error': lambda x: round(x.mean(), 1),
+                'count': 'sum'
             }).reset_index()
             
             fig = px.bar(
@@ -2878,10 +2910,11 @@ with tab13:
             )
             
             # Calculate average metrics by event category
-            category_stats = event_df.groupby(['event_category', 'line']).agg({
+            category_stats = event_df.groupby(['event_category', 'line'], observed=True).agg({
                 'accuracy_percentage': 'mean',
                 'avg_abs_error': 'mean',
-                'total_predictions': 'sum'
+                'total_predictions': 'sum',
+                'count': 'sum'
             }).round(1).reset_index()
             
             # Create accuracy bar plot
@@ -2918,10 +2951,11 @@ with tab13:
             
             # Show venue statistics during event windows
             st.subheader("Venue Performance During Event Windows (2 hours before and 4 hours after start)")
-            venue_stats = event_df[event_df['time_window'] == 'Event Window'].groupby('venue_name').agg({
+            venue_stats = event_df[event_df['time_window'] == 'Event Window'].groupby('venue_name', observed=True).agg({
                 'total_predictions': 'sum',
                 'accuracy_percentage': 'mean',
-                'avg_abs_error': 'mean'
+                'avg_abs_error': 'mean',
+                'count': 'sum'
             }).round(1).reset_index()
             venue_stats = venue_stats.sort_values('accuracy_percentage', ascending=False)
             # Rename columns for better display
