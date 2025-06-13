@@ -268,20 +268,11 @@ def collect_predictions(request):
                                 line,
                                 initial_prediction_timestamp,
                                 arrival_timestamp,
+                                direction,
                                 ROW_NUMBER() OVER (PARTITION BY train_id, initial_prediction_timestamp ORDER BY arrival_timestamp DESC) as rn
                             FROM `nico-playground-384514.transport_predictions.prediction_history`
                             WHERE arrival_timestamp IS NOT NULL
                             AND arrival_timestamp >= TIMESTAMP('{one_min_ago_str}')
-                        ),
-                        initial_locations AS (
-                            SELECT 
-                                train_id,
-                                initial_prediction_timestamp,
-                                current_location,
-                                direction,
-                                ROW_NUMBER() OVER (PARTITION BY train_id, initial_prediction_timestamp ORDER BY timestamp ASC) as rn
-                            FROM `nico-playground-384514.transport_predictions.prediction_history`
-                            WHERE initial_prediction_timestamp IS NOT NULL
                         ),
                         max_times AS (
                             SELECT 
@@ -289,6 +280,7 @@ def collect_predictions(request):
                                 initial_prediction_timestamp,
                                 MAX(time_to_station) as max_time_to_station
                             FROM `nico-playground-384514.transport_predictions.prediction_history`
+                            WHERE initial_prediction_timestamp >= TIMESTAMP_SUB(TIMESTAMP('{one_min_ago_str}'), INTERVAL 1 HOUR + INTERVAL 40 MINUTE)
                             GROUP BY train_id, initial_prediction_timestamp
                         )
                         SELECT DISTINCT
@@ -300,24 +292,12 @@ def collect_predictions(request):
                             mt.max_time_to_station as time_to_station,
                             EXTRACT(HOUR FROM ip.arrival_timestamp) as hour,
                             EXTRACT(DAYOFWEEK FROM ip.arrival_timestamp) - 1 as day_of_week,
-                            il.current_location,
-                            il.direction
+                            ip.direction
                         FROM initial_predictions ip
-                        LEFT JOIN initial_locations il 
-                            ON ip.train_id = il.train_id 
-                            AND ip.initial_prediction_timestamp = il.initial_prediction_timestamp
-                            AND il.rn = 1
                         LEFT JOIN max_times mt
                             ON ip.train_id = mt.train_id
                             AND ip.initial_prediction_timestamp = mt.initial_prediction_timestamp
                         WHERE ip.rn = 1
-                        AND NOT EXISTS (
-                            SELECT 1 
-                            FROM `nico-playground-384514.transport_predictions.initial_errors` ie
-                            WHERE ie.train_id = ip.train_id
-                            AND ie.initial_prediction_timestamp = ip.initial_prediction_timestamp
-                            AND ie.arrival_timestamp = ip.arrival_timestamp
-                        )
                         """
                     client.query(initial_errors_query)
                     print("Processed initial errors")
@@ -356,6 +336,7 @@ def collect_predictions(request):
                                             WHERE train_id = '{row['train_id']}'
                                             AND any_prediction_timestamp IS NULL
                                             AND arrival_timestamp IS NULL
+                                            AND timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 1 HOUR + INTERVAL 40 MINUTE) 
                                             ORDER BY TIMESTAMP DESC
                                             LIMIT 1
                                         )
