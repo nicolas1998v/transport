@@ -1,12 +1,39 @@
 import streamlit as st
 import pandas as pd
 from google.cloud import bigquery
-from google.cloud import storage
 from google.oauth2 import service_account
 import plotly.express as px
 from datetime import datetime, timedelta
-from pathlib import Path
+import plotly.graph_objects as go
+import redis
+import pickle
 
+# Initialize Redis client
+redis_client = redis.Redis(host='localhost', port=6379, db=0)
+
+def get_cached_query(query, ttl=3600):
+    """Get query results from cache or execute and cache if not found"""
+    # Create a unique key for this query
+    cache_key = f"query:{hash(query)}"
+    
+    # Try to get from cache
+    cached_result = redis_client.get(cache_key)
+    if cached_result:
+        print("Cache hit! Using cached results")
+        return pickle.loads(cached_result)
+    
+    # If not in cache, execute query
+    print("Cache miss! Executing query")
+    result = client.query(query).result()
+    df = result.to_dataframe()
+    
+    # Cache the result
+    redis_client.setex(cache_key, ttl, pickle.dumps(df))
+    
+    # Update last refresh time on cache miss
+    st.session_state.last_refresh_time = datetime.now()
+    
+    return df
 
 # Initialize GCP client with credentials from Streamlit secrets
 try:
@@ -24,18 +51,19 @@ except Exception as e:
     st.stop()
 
 
+# Replace the existing run_query function
+def run_query(query):
+    """Run a query and return a dataframe"""
+    try:
+        return get_cached_query(query)
+    except Exception as e:
+        st.error(f"Error executing query: {str(e)}")
+        return pd.DataFrame()
+
+
 # Set page config
 st.set_page_config(page_title="Kings Cross Tube Prediction Analysis", layout="wide")
 
-# Initialize session state for last refresh time if it doesn't exist
-if 'last_refresh_time' not in st.session_state:
-    st.session_state.last_refresh_time = datetime.now()
-
-@st.cache_data(ttl=3600)  # Cache for 1 hour
-def run_query(query):
-    # Update the last refresh time when a query is run
-    st.session_state.last_refresh_time = datetime.now()
-    return client.query(query).to_dataframe()
 
 # Get counts from both tables
 count_query = """
@@ -45,6 +73,7 @@ SELECT
 """
 count_df = run_query(count_query)
 total_count = count_df['total_count'].iloc[0]
+
 
 # Display refresh info and counts
 last_refresh = (st.session_state.last_refresh_time + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
@@ -276,12 +305,6 @@ def get_station_order(line, direction, station):
 def rename_station(station):
     """Rename station according to mapping"""
     return STATION_RENAMES.get(station, station)
-
-@st.cache_data(ttl=3600)  # Cache for 1 hour
-def run_query(query):
-    # Update the last refresh time when a query is run
-    st.session_state.last_refresh_time = datetime.now()
-    return client.query(query).to_dataframe()
 
 with tab1:
     st.header("Prediction Error Analysis")
