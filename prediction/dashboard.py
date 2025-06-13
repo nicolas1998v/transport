@@ -47,8 +47,6 @@ def get_cached_query(query, ttl=3600):
         print("Redis not available, executing query directly")
         result = client.query(query).result()
         df = result.to_dataframe()
-        # Update last refresh time since we got new data
-        st.session_state.last_refresh_time = datetime.now()
         return df
     
     # Create a unique key for this query
@@ -64,8 +62,6 @@ def get_cached_query(query, ttl=3600):
         print("Redis error, executing query directly")
         result = client.query(query).result()
         df = result.to_dataframe()
-        # Update last refresh time since we got new data
-        st.session_state.last_refresh_time = datetime.now()
         return df
     
     # If not in cache, execute query
@@ -76,13 +72,26 @@ def get_cached_query(query, ttl=3600):
     try:
         # Cache the result
         redis_client.setex(cache_key, ttl, pickle.dumps(df))
+        # Update last refresh time in Redis
+        redis_client.set('last_refresh_time', datetime.now().isoformat())
     except redis.RedisError:
         print("Redis error while caching, continuing without cache")
     
-    # Update last refresh time since we got new data
-    st.session_state.last_refresh_time = datetime.now()
-    
     return df
+
+def get_last_refresh_time():
+    """Get the last refresh time from Redis or return current time if not found"""
+    if not redis_available:
+        return datetime.now()
+    
+    try:
+        last_refresh_str = redis_client.get('last_refresh_time')
+        if last_refresh_str:
+            return datetime.fromisoformat(last_refresh_str.decode())
+    except (redis.RedisError, ValueError):
+        pass
+    
+    return datetime.now()
 
 # Initialize GCP client with credentials from Streamlit secrets
 try:
@@ -113,10 +122,6 @@ def run_query(query):
 # Set page config
 st.set_page_config(page_title="Kings Cross Tube Prediction Analysis", layout="wide")
 
-# Initialize session state for last refresh time if it doesn't exist
-if 'last_refresh_time' not in st.session_state:
-    st.session_state.last_refresh_time = datetime.now()
-
 # Get counts from both tables
 count_query = """
 SELECT 
@@ -127,8 +132,9 @@ count_df = run_query(count_query)
 total_count = count_df['total_count'].iloc[0]
 
 # Display refresh info and counts
-last_refresh = (st.session_state.last_refresh_time + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
-st.info(f"Data refreshes every hour. Last refreshed: {last_refresh} | Total observations: {total_count:,}")
+last_refresh = get_last_refresh_time()
+next_refresh = (last_refresh + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
+st.info(f"Data refreshes every hour. Last refreshed: {next_refresh} | Total observations: {total_count:,}")
 
 # Create tabs
 tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13 = st.tabs([
