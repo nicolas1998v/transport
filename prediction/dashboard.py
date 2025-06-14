@@ -86,6 +86,14 @@ def normalize_query(query):
     query = ' '.join(query.split())
     # Remove any trailing semicolons
     query = query.rstrip(';')
+    
+    # Replace timestamp formatting with a standard format
+    query = query.replace("FORMAT_TIMESTAMP('%Y-%m-%d %H:%M:%S',", "FORMAT_TIMESTAMP('standard',")
+    
+    # Remove any ORDER BY clauses as they don't affect the data
+    if 'ORDER BY' in query:
+        query = query.split('ORDER BY')[0]
+    
     return query
 
 def get_cache_key(query):
@@ -104,7 +112,6 @@ def get_cached_query(query):
         # Try Redis first
         if redis_client is not None:
             try:
-                # Check if we have a cached result
                 cached_result = redis_client.get(cache_key)
                 st.write(f"Cache lookup result: {'Found' if cached_result is not None else 'Not found'}")
                 
