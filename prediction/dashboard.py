@@ -1494,140 +1494,140 @@ with tab3:
             )
             st.plotly_chart(fig, use_container_width=True)
 
-     # Add new visualization for accuracy per line by day of week
-    st.subheader("Accuracy by Line and Day of Week")
+    #  # Add new visualization for accuracy per line by day of week
+    # st.subheader("Accuracy by Line and Day of Week")
             
-    day_line_query = """
-            SELECT 
-                line,
-                day_of_week,
-                COUNT(*) as total_predictions,
-                ROUND(AVG(error_seconds), 1) as avg_error,
-                ROUND(AVG(ABS(error_seconds)), 1) as avg_abs_error,
-                ROUND(COUNTIF(ABS(error_seconds) <= 30) / COUNT(*) * 100, 1) as accuracy_percentage,
-                ROUND(COUNTIF(ABS(error_seconds) <= 60) / COUNT(*) * 100, 1) as accuracy_percentage_60s
-            FROM `nico-playground-384514.transport_predictions.any_errors`
-            GROUP BY line, day_of_week
-            ORDER BY line, day_of_week
-            """
+    # day_line_query = """
+    #         SELECT 
+    #             line,
+    #             day_of_week,
+    #             COUNT(*) as total_predictions,
+    #             ROUND(AVG(error_seconds), 1) as avg_error,
+    #             ROUND(AVG(ABS(error_seconds)), 1) as avg_abs_error,
+    #             ROUND(COUNTIF(ABS(error_seconds) <= 30) / COUNT(*) * 100, 1) as accuracy_percentage,
+    #             ROUND(COUNTIF(ABS(error_seconds) <= 60) / COUNT(*) * 100, 1) as accuracy_percentage_60s
+    #         FROM `nico-playground-384514.transport_predictions.any_errors`
+    #         GROUP BY line, day_of_week
+    #         ORDER BY line, day_of_week
+    #         """
 
-    day_line_df = get_cached_query(day_line_query)
+    # day_line_df = get_cached_query(day_line_query)
     
-    if not day_line_df.empty:
-        # Debug prints
-        st.write("DataFrame columns:", day_line_df.columns.tolist())
-        st.write("DataFrame head:", day_line_df.head())
+    # if not day_line_df.empty:
+    #     # Debug prints
+    #     st.write("DataFrame columns:", day_line_df.columns.tolist())
+    #     st.write("DataFrame head:", day_line_df.head())
         
-        # Create a mapping of day numbers to names (1-7)
-        day_names = {
-            1: 'Monday',
-            2: 'Tuesday',
-            3: 'Wednesday',
-            4: 'Thursday',
-            5: 'Friday',
-            6: 'Saturday',
-            7: 'Sunday'
-        }
+    #     # Create a mapping of day numbers to names (1-7)
+    #     day_names = {
+    #         1: 'Monday',
+    #         2: 'Tuesday',
+    #         3: 'Wednesday',
+    #         4: 'Thursday',
+    #         5: 'Friday',
+    #         6: 'Saturday',
+    #         7: 'Sunday'
+    #     }
         
-        # Map day numbers to names
-        day_line_df['day_name'] = day_line_df['day_of_week'].map(day_names)
+    #     # Map day numbers to names
+    #     day_line_df['day_name'] = day_line_df['day_of_week'].map(day_names)
         
-        # Debug print after mapping
-        st.write("DataFrame after mapping:", day_line_df.head())
+    #     # Debug print after mapping
+    #     st.write("DataFrame after mapping:", day_line_df.head())
         
-        # Create complete index and columns for all combinations
-        all_lines = sorted(day_line_df['line'].unique())
-        all_days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    #     # Create complete index and columns for all combinations
+    #     all_lines = sorted(day_line_df['line'].unique())
+    #     all_days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
         
-        # First aggregate any duplicate entries - use first() for error metrics
-        agg_df = day_line_df.groupby(['line', 'day_name']).agg({
-            'accuracy_percentage': 'mean',
-            'accuracy_percentage_60s': 'mean',
-            'avg_error': 'first',
-            'avg_abs_error': 'first'
-        }).reset_index()
+    #     # First aggregate any duplicate entries - use first() for error metrics
+    #     agg_df = day_line_df.groupby(['line', 'day_name']).agg({
+    #         'accuracy_percentage': 'mean',
+    #         'accuracy_percentage_60s': 'mean',
+    #         'avg_error': 'first',
+    #         'avg_abs_error': 'first'
+    #     }).reset_index()
         
-        # Debug print after aggregation
-        st.write("Aggregated DataFrame:", agg_df.head())
+    #     # Debug print after aggregation
+    #     st.write("Aggregated DataFrame:", agg_df.head())
         
-        # Create pivot tables from aggregated data
-        pivot_df = agg_df.pivot(index='line', columns='day_name', values='accuracy_percentage')
-        error_df = agg_df.pivot(index='line', columns='day_name', values='avg_error')
-        abs_error_df = agg_df.pivot(index='line', columns='day_name', values='avg_abs_error')
+    #     # Create pivot tables from aggregated data
+    #     pivot_df = agg_df.pivot(index='line', columns='day_name', values='accuracy_percentage')
+    #     error_df = agg_df.pivot(index='line', columns='day_name', values='avg_error')
+    #     abs_error_df = agg_df.pivot(index='line', columns='day_name', values='avg_abs_error')
         
-        # Reorder columns to match all_days
-        pivot_df = pivot_df.reindex(columns=all_days)
-        error_df = error_df.reindex(columns=all_days)
-        abs_error_df = abs_error_df.reindex(columns=all_days)
+    #     # Reorder columns to match all_days
+    #     pivot_df = pivot_df.reindex(columns=all_days)
+    #     error_df = error_df.reindex(columns=all_days)
+    #     abs_error_df = abs_error_df.reindex(columns=all_days)
         
-        # Create hover text with all metrics
-        hover_text = []
-        for i in range(len(pivot_df.index)):
-            row = []
-            for j in range(len(pivot_df.columns)):
-                text = f"Line: {pivot_df.index[i]}<br>"
-                text += f"Day: {pivot_df.columns[j]}<br>"
-                text += f"Accuracy: {pivot_df.iloc[i,j]:.1f}%<br>"
-                text += f"Avg Error: {error_df.iloc[i,j]:.1f}s<br>"
-                text += f"Avg Abs Error: {abs_error_df.iloc[i,j]:.1f}s"
-                row.append(text)
-            hover_text.append(row)
+    #     # Create hover text with all metrics
+    #     hover_text = []
+    #     for i in range(len(pivot_df.index)):
+    #         row = []
+    #         for j in range(len(pivot_df.columns)):
+    #             text = f"Line: {pivot_df.index[i]}<br>"
+    #             text += f"Day: {pivot_df.columns[j]}<br>"
+    #             text += f"Accuracy: {pivot_df.iloc[i,j]:.1f}%<br>"
+    #             text += f"Avg Error: {error_df.iloc[i,j]:.1f}s<br>"
+    #             text += f"Avg Abs Error: {abs_error_df.iloc[i,j]:.1f}s"
+    #             row.append(text)
+    #         hover_text.append(row)
         
-        # Create the heatmap with fixed color scale for 30s
-        fig = px.imshow(
-            pivot_df,
-            labels=dict(x="Day of Week", y="Line", color="Accuracy % (±30s)"),
-            title="Prediction Accuracy by Line and Day of Week (±30s)",
-            color_continuous_scale='RdYlGn',
-            aspect='auto',
-            zmin=0,
-            zmax=100
-        )
+    #     # Create the heatmap with fixed color scale for 30s
+    #     fig = px.imshow(
+    #         pivot_df,
+    #         labels=dict(x="Day of Week", y="Line", color="Accuracy % (±30s)"),
+    #         title="Prediction Accuracy by Line and Day of Week (±30s)",
+    #         color_continuous_scale='RdYlGn',
+    #         aspect='auto',
+    #         zmin=0,
+    #         zmax=100
+    #     )
         
-        # Update layout and add hover text
-        fig.update_layout(
-            height=600,
-            xaxis={'categoryorder': 'array', 'categoryarray': all_days}
-        )
-        fig.update_traces(hovertemplate="%{customdata}<extra></extra>", customdata=hover_text)
+    #     # Update layout and add hover text
+    #     fig.update_layout(
+    #         height=600,
+    #         xaxis={'categoryorder': 'array', 'categoryarray': all_days}
+    #     )
+    #     fig.update_traces(hovertemplate="%{customdata}<extra></extra>", customdata=hover_text)
         
-        st.plotly_chart(fig, use_container_width=True)
+    #     st.plotly_chart(fig, use_container_width=True)
         
-        # Create a heatmap showing accuracy by line and day (±60s)
-        pivot_df_60s = agg_df.pivot(index='line', columns='day_name', values='accuracy_percentage_60s')
-        pivot_df_60s = pivot_df_60s.reindex(columns=all_days)
+    #     # Create a heatmap showing accuracy by line and day (±60s)
+    #     pivot_df_60s = agg_df.pivot(index='line', columns='day_name', values='accuracy_percentage_60s')
+    #     pivot_df_60s = pivot_df_60s.reindex(columns=all_days)
         
-        # Create hover text with all metrics for 60s
-        hover_text_60s = []
-        for i in range(len(pivot_df_60s.index)):
-            row = []
-            for j in range(len(pivot_df_60s.columns)):
-                text = f"Line: {pivot_df_60s.index[i]}<br>"
-                text += f"Day: {pivot_df_60s.columns[j]}<br>"
-                text += f"Accuracy: {pivot_df_60s.iloc[i,j]:.1f}%<br>"
-                text += f"Avg Error: {error_df.iloc[i,j]:.1f}s<br>"
-                text += f"Avg Abs Error: {abs_error_df.iloc[i,j]:.1f}s"
-                row.append(text)
-            hover_text_60s.append(row)
+    #     # Create hover text with all metrics for 60s
+    #     hover_text_60s = []
+    #     for i in range(len(pivot_df_60s.index)):
+    #         row = []
+    #         for j in range(len(pivot_df_60s.columns)):
+    #             text = f"Line: {pivot_df_60s.index[i]}<br>"
+    #             text += f"Day: {pivot_df_60s.columns[j]}<br>"
+    #             text += f"Accuracy: {pivot_df_60s.iloc[i,j]:.1f}%<br>"
+    #             text += f"Avg Error: {error_df.iloc[i,j]:.1f}s<br>"
+    #             text += f"Avg Abs Error: {abs_error_df.iloc[i,j]:.1f}s"
+    #             row.append(text)
+    #         hover_text_60s.append(row)
         
-        fig_60s = px.imshow(
-            pivot_df_60s,
-            labels=dict(x="Day of Week", y="Line", color="Accuracy % (±60s)"),
-            title="Prediction Accuracy by Line and Day of Week (±60s)",
-            color_continuous_scale='RdYlGn',
-            aspect='auto',
-            zmin=0,
-            zmax=100
-        )
+    #     fig_60s = px.imshow(
+    #         pivot_df_60s,
+    #         labels=dict(x="Day of Week", y="Line", color="Accuracy % (±60s)"),
+    #         title="Prediction Accuracy by Line and Day of Week (±60s)",
+    #         color_continuous_scale='RdYlGn',
+    #         aspect='auto',
+    #         zmin=0,
+    #         zmax=100
+    #     )
         
-        # Update layout and add hover text
-        fig_60s.update_layout(
-            height=600,
-            xaxis={'categoryorder': 'array', 'categoryarray': all_days}
-        )
-        fig_60s.update_traces(hovertemplate="%{customdata}<extra></extra>", customdata=hover_text_60s)
+    #     # Update layout and add hover text
+    #     fig_60s.update_layout(
+    #         height=600,
+    #         xaxis={'categoryorder': 'array', 'categoryarray': all_days}
+    #     )
+    #     fig_60s.update_traces(hovertemplate="%{customdata}<extra></extra>", customdata=hover_text_60s)
         
-        st.plotly_chart(fig_60s, use_container_width=True)
+    #     st.plotly_chart(fig_60s, use_container_width=True)
 
 with tab4:
     st.header("Prediction Precision Analysis")
