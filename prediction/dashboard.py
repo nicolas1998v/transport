@@ -90,11 +90,13 @@ def get_cached_query(query):
     """Try Redis first, fall back to direct query if Redis fails."""
     try:
         cache_key = get_cache_key(query)
+        st.write(f"Redis client status: {'Connected' if redis_client is not None else 'Not connected'}")  # Debug print
         
         # Try Redis first
         if redis_client is not None:
             try:
                 cached_result = redis_client.get(cache_key)
+                st.write(f"Cache lookup result: {'Found' if cached_result is not None else 'Not found'}")  # Debug print
                 if cached_result is not None:
                     st.success(f"Cache HIT at {datetime.now().strftime('%H:%M:%S')}")
                     # Parse the JSON string back to DataFrame using StringIO
@@ -106,7 +108,7 @@ def get_cached_query(query):
                             df[col] = pd.to_numeric(df[col], errors='coerce')
                     return df
             except Exception as e:
-                st.warning(f"Redis error: {str(e)}")
+                st.warning(f"Redis error during get: {str(e)}")
         
         # If Redis fails or no cache hit, execute query
         st.warning(f"Cache MISS at {datetime.now().strftime('%H:%M:%S')} - executing query")
@@ -120,7 +122,7 @@ def get_cached_query(query):
                 redis_client.setex(cache_key, 3600, json_str)
                 st.info(f"Cached result in Redis with key: {cache_key}")  # Debug print
             except Exception as e:
-                st.warning(f"Failed to cache: {str(e)}")
+                st.warning(f"Redis error during set: {str(e)}")
         
         return result
         
@@ -2431,31 +2433,31 @@ with tab10:
                     f"{most_affected.index[0]} ({most_affected.iloc[0]} periods)",
                 )
         
-        # Add summary statistics
-        st.subheader("Summary Statistics by Line")
+        # # Add summary statistics
+        # st.subheader("Summary Statistics by Line")
         
-        # Calculate statistics per line
-        line_stats = anomaly_df.groupby('line').agg({
-            'avg_error': 'mean',
-            'accuracy_percentage': 'mean',
-            'total_predictions': 'sum'
-        }).reset_index()
+        # # Calculate statistics per line
+        # line_stats = anomaly_df.groupby('line').agg({
+        #     'avg_error': 'mean',
+        #     'accuracy_percentage': 'mean',
+        #     'total_predictions': 'sum'
+        # }).reset_index()
         
-        # Rename columns for clarity
-        line_stats.columns = ['Line', 'Average Error (s)', 'Average Accuracy (%)', 'Total Predictions']
+        # # Rename columns for clarity
+        # line_stats.columns = ['Line', 'Average Error (s)', 'Average Accuracy (%)', 'Total Predictions']
         
-        # Sort by total predictions
-        line_stats = line_stats.sort_values('Total Predictions', ascending=False)
+        # # Sort by total predictions
+        # line_stats = line_stats.sort_values('Total Predictions', ascending=False)
         
-        # Display as a table
-        st.dataframe(
-            line_stats.style.format({
-                'Average Error (s)': '{:.1f}',
-                'Average Accuracy (%)': '{:.1f}',
-                'Total Predictions': '{:,.0f}'
-            }),
-            use_container_width=True
-        )
+        # # Display as a table
+        # st.dataframe(
+        #     line_stats.style.format({
+        #         'Average Error (s)': '{:.1f}',
+        #         'Average Accuracy (%)': '{:.1f}',
+        #         'Total Predictions': '{:,.0f}'
+        #     }),
+        #     use_container_width=True
+        # )
 
 with tab11:
     st.header("Line Interaction Analysis")
