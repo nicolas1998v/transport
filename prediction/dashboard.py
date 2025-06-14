@@ -102,7 +102,6 @@ def get_cache_key(query):
     """Generate a consistent cache key for a query."""
     normalized_query = normalize_query(query)
     key = f"query:{hashlib.md5(normalized_query.encode()).hexdigest()}"
-    st.write(f"Generated cache key: {key}")
     return key
 
 def compress_data(data):
@@ -121,6 +120,8 @@ def get_cached_query(query):
     """Try Redis first, fall back to direct query if Redis fails."""
     try:
         cache_key = get_cache_key(query)
+        print(f"\n=== QUERY SIZE DEBUG ===")
+        print(f"Query: {query[:100]}...")  # Show first 100 chars of query
         
         # Try Redis first
         if redis_client is not None:
@@ -136,14 +137,23 @@ def get_cached_query(query):
         st.warning("Cache miss - executing BigQuery (will cache for 1 hour)")
         result = client.query(query).to_dataframe()
         
+        # Print size info
+        result_size_mb = result.memory_usage(deep=True).sum() / (1024 * 1024)
+        print(f"Query result size: {result_size_mb:.2f} MB")
+        print(f"Number of rows: {len(result)}")
+        print(f"Number of columns: {len(result.columns)}")
+        print(f"Columns: {', '.join(result.columns)}")
+        print("========================\n")
+        
         # Try to cache in Redis for next time
         if redis_client is not None:
             try:
                 compressed_data = compress_data(result)
-                data_size_mb = len(compressed_data) / (1024 * 1024)
-                print(f"Data size to cache: {data_size_mb:.2f} MB")
+                compressed_size_mb = len(compressed_data) / (1024 * 1024)
+                print(f"Compressed size: {compressed_size_mb:.2f} MB")
+                print(f"Compression ratio: {result_size_mb/compressed_size_mb:.1f}x")
                 
-                if data_size_mb > 30:
+                if compressed_size_mb > 30:
                     print("WARNING: Data size exceeds Redis free tier limit (30MB)")
                     st.warning("Data too large for Redis free tier - skipping cache")
                     return result
