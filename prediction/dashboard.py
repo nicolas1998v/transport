@@ -2488,31 +2488,31 @@ with tab10:
                     f"{most_affected.index[0]} ({most_affected.iloc[0]} periods)",
                 )
         
-        # # Add summary statistics
-        # st.subheader("Summary Statistics by Line")
+        # Add summary statistics
+        st.subheader("Summary Statistics by Line")
         
-        # # Calculate statistics per line
-        # line_stats = anomaly_df.groupby('line').agg({
-        #     'avg_error': 'mean',
-        #     'accuracy_percentage': 'mean',
-        #     'total_predictions': 'sum'
-        # }).reset_index()
+        # Calculate statistics per line
+        line_stats = anomaly_df.groupby('line').agg({
+            'avg_error': 'mean',
+            'accuracy_percentage': 'mean',
+            'total_predictions': 'sum'
+        }).reset_index()
         
-        # # Rename columns for clarity
-        # line_stats.columns = ['Line', 'Average Error (s)', 'Average Accuracy (%)', 'Total Predictions']
+        # Rename columns for clarity
+        line_stats.columns = ['Line', 'Average Error (s)', 'Average Accuracy (%)', 'Total Predictions']
         
-        # # Sort by total predictions
-        # line_stats = line_stats.sort_values('Total Predictions', ascending=False)
+        # Sort by total predictions
+        line_stats = line_stats.sort_values('Total Predictions', ascending=False)
         
-        # # Display as a table
-        # st.dataframe(
-        #     line_stats.style.format({
-        #         'Average Error (s)': '{:.1f}',
-        #         'Average Accuracy (%)': '{:.1f}',
-        #         'Total Predictions': '{:,.0f}'
-        #     }),
-        #     use_container_width=True
-        # )
+        # Display as a table
+        st.dataframe(
+            line_stats.style.format({
+                'Average Error (s)': '{:.1f}',
+                'Average Accuracy (%)': '{:.1f}',
+                'Total Predictions': '{:,.0f}'
+            }),
+            use_container_width=True
+        )
 
 with tab11:
     st.header("Line Interaction Analysis")
