@@ -80,10 +80,19 @@ except Exception as e:
         st.error(f"Error connecting to Redis with SSL: {str(e)}")
         redis_client = None
 
+def normalize_query(query):
+    """Normalize a SQL query by removing extra whitespace and standardizing formatting."""
+    # Remove extra whitespace
+    query = ' '.join(query.split())
+    # Remove any trailing semicolons
+    query = query.rstrip(';')
+    return query
+
 def get_cache_key(query):
     """Generate a consistent cache key for a query."""
-    key = f"query:{hashlib.md5(query.encode()).hexdigest()}"
-    st.write(f"Generated cache key: {key}")  # Debug print
+    normalized_query = normalize_query(query)
+    key = f"query:{hashlib.md5(normalized_query.encode()).hexdigest()}"
+    st.write(f"Generated cache key: {key}")
     return key
 
 def get_cached_query(query):
@@ -96,17 +105,21 @@ def get_cached_query(query):
         if redis_client is not None:
             try:
                 cached_result = redis_client.get(cache_key)
-                st.write(f"Cache lookup result: {'Found' if cached_result is not None else 'Not found'}")  # Debug print
+                st.write(f"Cache lookup result: {'Found' if cached_result is not None else 'Not found'}")
                 if cached_result is not None:
                     st.success(f"Cache HIT at {datetime.now().strftime('%H:%M:%S')}")
-                    # Parse the JSON string back to DataFrame using StringIO
-                    df = pd.read_json(StringIO(cached_result))
-                    # Ensure numeric columns are numeric
-                    numeric_columns = ['accuracy_percentage', 'accuracy_percentage_60s', 'avg_error', 'avg_abs_error', 'total_predictions']
-                    for col in numeric_columns:
-                        if col in df.columns:
-                            df[col] = pd.to_numeric(df[col], errors='coerce')
-                    return df
+                    try:
+                        # Parse the JSON string back to DataFrame using StringIO
+                        df = pd.read_json(StringIO(cached_result))
+                        # Ensure numeric columns are numeric
+                        numeric_columns = ['accuracy_percentage', 'accuracy_percentage_60s', 'avg_error', 'avg_abs_error', 'total_predictions']
+                        for col in numeric_columns:
+                            if col in df.columns:
+                                df[col] = pd.to_numeric(df[col], errors='coerce')
+                        return df
+                    except Exception as e:
+                        st.warning(f"Error parsing cached data: {str(e)} - executing query")
+                        return client.query(query).to_dataframe()
             except Exception as e:
                 st.warning(f"Redis error during get: {str(e)}")
         
@@ -120,7 +133,7 @@ def get_cached_query(query):
                 # Cache for 1 hour
                 json_str = result.to_json(orient='records', date_format='iso')
                 redis_client.setex(cache_key, 3600, json_str)
-                st.info(f"Cached result in Redis with key: {cache_key}")  # Debug print
+                st.info(f"Cached result in Redis with key: {cache_key}")
             except Exception as e:
                 st.warning(f"Redis error during set: {str(e)}")
         
