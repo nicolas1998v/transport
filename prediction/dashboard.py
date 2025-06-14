@@ -2438,19 +2438,21 @@ with tab10:
         line_stats = anomaly_df.groupby('line').agg({
             'avg_error': 'mean',
             'accuracy_percentage': 'mean',
+            'total_predictions': 'sum'
         }).reset_index()
         
         # Rename columns for clarity
-        line_stats.columns = ['Line', 'Average Absolute Error (s)', 'Average Accuracy (%)', 'Number of Anomalies']
+        line_stats.columns = ['Line', 'Average Error (s)', 'Average Accuracy (%)', 'Total Predictions']
         
-        # Sort by number of anomalies
-        line_stats = line_stats.sort_values('Number of Anomalies', ascending=False)
+        # Sort by total predictions
+        line_stats = line_stats.sort_values('Total Predictions', ascending=False)
         
         # Display as a table
         st.dataframe(
             line_stats.style.format({
-                'Average Absolute Error (s)': '{:.1f}',
-                'Average Accuracy (%)': '{:.1f}'
+                'Average Error (s)': '{:.1f}',
+                'Average Accuracy (%)': '{:.1f}',
+                'Total Predictions': '{:,.0f}'
             }),
             use_container_width=True
         )
