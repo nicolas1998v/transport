@@ -12,6 +12,8 @@ import redis
 from datetime import datetime
 import hashlib
 from io import StringIO
+import zlib
+import base64
 
 # Initialize GCP client with credentials from Streamlit secrets
 try:
@@ -103,6 +105,18 @@ def get_cache_key(query):
     st.write(f"Generated cache key: {key}")
     return key
 
+def compress_data(data):
+    """Compress data before storing in Redis."""
+    json_str = data.to_json(orient='records', date_format='iso')
+    compressed = zlib.compress(json_str.encode())
+    return base64.b64encode(compressed).decode()
+
+def decompress_data(compressed_data):
+    """Decompress data retrieved from Redis."""
+    decoded = base64.b64decode(compressed_data)
+    decompressed = zlib.decompress(decoded)
+    return pd.read_json(StringIO(decompressed.decode()))
+
 def get_cached_query(query):
     """Try Redis first, fall back to direct query if Redis fails."""
     try:
@@ -118,8 +132,8 @@ def get_cached_query(query):
                 if cached_result is not None:
                     st.success(f"Cache HIT at {datetime.now().strftime('%H:%M:%S')}")
                     try:
-                        # Parse the JSON string back to DataFrame using StringIO
-                        df = pd.read_json(StringIO(cached_result))
+                        # Decompress and parse the cached data
+                        df = decompress_data(cached_result)
                         # Ensure numeric columns are numeric
                         numeric_columns = ['accuracy_percentage', 'accuracy_percentage_60s', 'avg_error', 'avg_abs_error', 'total_predictions']
                         for col in numeric_columns:
@@ -139,9 +153,10 @@ def get_cached_query(query):
         # Try to cache in Redis for next time
         if redis_client is not None:
             try:
+                # Compress data before caching
+                compressed_data = compress_data(result)
                 # Cache for 1 hour
-                json_str = result.to_json(orient='records', date_format='iso')
-                redis_client.setex(cache_key, 3600, json_str)
+                redis_client.setex(cache_key, 3600, compressed_data)
                 st.info(f"Cached result in Redis with key: {cache_key}")
             except Exception as e:
                 st.warning(f"Redis error during set: {str(e)}")
