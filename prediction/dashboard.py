@@ -140,6 +140,14 @@ def get_cached_query(query):
         if redis_client is not None:
             try:
                 compressed_data = compress_data(result)
+                data_size_mb = len(compressed_data) / (1024 * 1024)
+                print(f"Data size to cache: {data_size_mb:.2f} MB")
+                
+                if data_size_mb > 30:
+                    print("WARNING: Data size exceeds Redis free tier limit (30MB)")
+                    st.warning("Data too large for Redis free tier - skipping cache")
+                    return result
+                    
                 redis_client.setex(cache_key, 3600, compressed_data)  # 1 hour
             except Exception as e:
                 st.warning(f"Redis error: {str(e)}")
