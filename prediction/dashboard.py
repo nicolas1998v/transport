@@ -621,10 +621,8 @@ with tab1:
                 'time_to_station': 'Time to Station (seconds)',
                 'line': 'Tube Line',
                 'any_prediction_timestamp': 'Prediction Timestamp',
-                'train_id': 'Train ID',
-                'run_number': 'Run Number'
-                },
-                hover_data=['train_id', 'run_number','any_prediction_timestamp','arrival_timestamp'],
+                'train_id': 'Train ID'},
+                hover_data=['train_id','any_prediction_timestamp','arrival_timestamp'],
                 category_orders={
                     'line': ['metropolitan', 'hammersmith-city', 'northern', 'piccadilly', 'victoria']
                 }
@@ -664,11 +662,10 @@ with tab1:
                 'time_to_station': 'Time to Station (seconds)',
                 'line': 'Tube Line',
                     'any_prediction_timestamp': 'Prediction Timestamp',
-                    'train_id': 'Train ID',
-                    'run_number': 'Run Number'
+                    'train_id': 'Train ID'
 
                 },
-                hover_data=['train_id', 'run_number', 'any_prediction_timestamp','arrival_timestamp'],
+                hover_data=['train_id', 'any_prediction_timestamp','arrival_timestamp'],
                 category_orders={
                     'line': ['metropolitan', 'hammersmith-city', 'northern', 'piccadilly', 'victoria']
                 }
