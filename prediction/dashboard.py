@@ -2436,9 +2436,8 @@ with tab10:
         
         # Calculate statistics per line
         line_stats = anomaly_df.groupby('line').agg({
-            'avg_error': ['mean', 'std'],
+            'avg_error': 'mean'
             'accuracy_percentage': 'mean',
-            'total_predictions': 'sum'
         }).reset_index()
         
         # Rename columns for clarity
