@@ -10,6 +10,8 @@ from io import StringIO
 import zlib
 import base64
 
+st.set_page_config(layout="wide")
+
 # Initialize GCP client with credentials from Streamlit secrets
 try:
     credentials = service_account.Credentials.from_service_account_info(
@@ -136,7 +138,6 @@ count_df = get_cached_query(count_query)
 total_count = count_df['total_count'].iloc[0]
 
 st.info(f"Data is cached and updates every hour | Total observations: {total_count:,}")
-st.set_page_config(layout="wide")
 st.title("Kings Cross Tube Prediction Analysis")
 
 # Create tabs
