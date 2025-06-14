@@ -99,13 +99,15 @@ def get_cached_query(query):
     """Try Redis first, fall back to direct query if Redis fails."""
     try:
         cache_key = get_cache_key(query)
-        st.write(f"Redis client status: {'Connected' if redis_client is not None else 'Not connected'}")  # Debug print
+        st.write(f"Redis client status: {'Connected' if redis_client is not None else 'Not connected'}")
         
         # Try Redis first
         if redis_client is not None:
             try:
+                # Check if we have a cached result
                 cached_result = redis_client.get(cache_key)
                 st.write(f"Cache lookup result: {'Found' if cached_result is not None else 'Not found'}")
+                
                 if cached_result is not None:
                     st.success(f"Cache HIT at {datetime.now().strftime('%H:%M:%S')}")
                     try:
@@ -143,17 +145,32 @@ def get_cached_query(query):
         st.error(f"Error executing query: {str(e)}")
         raise
 
+# Initialize session state for tracking last refresh
+if 'last_refresh' not in st.session_state:
+    st.session_state.last_refresh = datetime.now()
+
+# Check if we need to refresh the data
+current_time = datetime.now()
+time_since_refresh = (current_time - st.session_state.last_refresh).total_seconds()
+
+# Only refresh if more than 1 hour has passed
+if time_since_refresh > 3600:
+    st.session_state.last_refresh = current_time
+    st.info("Refreshing data after 1 hour...")
+else:
+    st.info(f"Data refreshes every hour | Last refresh: {st.session_state.last_refresh.strftime('%H:%M:%S')}")
+
 # Get counts from both tables
 count_query = """
 SELECT 
     (SELECT COUNT(*) FROM `nico-playground-384514.transport_predictions.initial_errors`) +
     (SELECT COUNT(*) FROM `nico-playground-384514.transport_predictions.any_errors`) as total_count
 """
-count_df = get_cached_query(count_query)  # Same 1-hour cache as everything else
+count_df = get_cached_query(count_query)
 total_count = count_df['total_count'].iloc[0]
 
 # Display info
-st.info(f"Data refreshes every hour | Total observations: {total_count:,}")
+st.info(f"Total observations: {total_count:,}")
 
 # Create tabs
 tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13 = st.tabs([
