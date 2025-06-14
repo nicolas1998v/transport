@@ -122,11 +122,11 @@ The system is optimized for cost efficiency:
 
 ### Dashboard (Streamlit)
 - Uses Redis caching to store query results for 1 hour
-- Dashboard refreshes every hour for 14 hours per day
-- Processes 10-15 queries per refresh (140-210 queries daily)
-- Daily dashboard cost: ~$0.01 to $0.02
-- Monthly dashboard cost: ~$0.30 to $0.60
-- Yearly dashboard cost: ~$3.60 to $7.20
+- Dashboard refreshes every hour, 24 hours per day
+- Processes 10-15 queries per refresh (240-360 queries daily)
+- Daily dashboard cost: ~$0.02 to $0.03
+- Monthly dashboard cost: ~$0.60 to $0.90
+- Yearly dashboard cost: ~$7.20 to $10.80
 
 Total System Cost:
 - Daily: ~$0.13 to $0.27
@@ -182,6 +182,7 @@ You would need to retrieve many keys from the Transport for London API (by creat
 For the heatmap you would need to filter the data to get valid postcodes.  
 For the predictions you would need to create 3 tables in Bigquery and set up API connections to Ticketmaster and WeatherMap API by adding appropriate keys in the .env file.  
 The events and weather data collection is done through Cloud Functions as its simpler, and scheduled by Cloud Scheduler.
+If you want to power the prediction project on a streamlit dashboard, you need to add your service account keys and Redis connection details to your streamlit secrets in TOML format.
 
 ---
 
@@ -192,4 +193,4 @@ The events and weather data collection is done through Cloud Functions as its si
 - TicketMaster API for event data
 - London postcode data sourced from doogal.co.uk.
 - Google Cloud VM, systemd,and Cloud Scheduler for robust, cost-effective deployment.
-- My brother Juan Pablo for proving me guidance throughout this past year.
+- My brother Juan Pablo for the guidance throughout this past year.
