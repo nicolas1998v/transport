@@ -66,7 +66,7 @@ This Streamlit dashboard visualizes journey times from the Houses of Parliament 
 
 # [Prediction Error Dashboard](https://kingscrossdashboard.streamlit.app/)
 
-This dashboard analyzes and visualizes prediction errors for London Underground trains serving King’s Cross, using data from the TfL API and Google BigQuery.
+This dashboard analyzes and visualizes prediction errors for London Underground trains serving King's Cross, using data from the TfL API and Google BigQuery.
 
 ## Data Journey
 
@@ -76,16 +76,16 @@ This dashboard analyzes and visualizes prediction errors for London Underground 
   To isolate individual train runs and remove glitches, I developed a query that checked for observations, allowing me to segment continuous data into distinct runs.
 - **Data Collection:**  
   - **Initial Approach:** I started by making API requests every minute.
-  - **Optimization:** To better capture arrivals and anomaly magnitudes, I switched to every 30 seconds. However, this sometimes wasn’t enough to process all data when there were many lengthy arrivals, so I increased the interval to 33 seconds, which proved to be the best balance between arrival detection and processing time.
+  - **Optimization:** To better capture arrivals and anomaly magnitudes, I switched to every 30 seconds. However, this sometimes wasn't enough to process all data when there were many lengthy arrivals, so I increased the interval to 33 seconds, which proved to be the best balance between arrival detection and processing time.
 
 ## BigQuery Tables
 
 - **predictions_history:**  
   The main table gathering all raw prediction data.
 - **initial_errors:**  
-  Contains only the first prediction for each train run (the “initial prediction”).
+  Contains only the first prediction for each train run (the "initial prediction").
 - **any_errors:**  
-  Contains all predictions for each run (the “any prediction”).
+  Contains all predictions for each run (the "any prediction").
   
 ### Table Columns
 
@@ -96,7 +96,7 @@ This dashboard analyzes and visualizes prediction errors for London Underground 
 - `direction`: Direction of travel.
 - `error_seconds`: Prediction error in seconds.
 - `time_to_station`: Time to station in seconds.
-- `current_location`: Text description of the train’s location.
+- `current_location`: Text description of the train's location.
 - `initial_prediction_timestamp`: timestamp of the initial prediction
 - `any_prediction_timestamp`: timestamp of any prediction
 - ...and other relevant fields.
@@ -108,6 +108,30 @@ This dashboard analyzes and visualizes prediction errors for London Underground 
 - **Interactive Visualizations:** Explore prediction errors, accuracy by line, time, location, and more.
 - **Correlation & Error Analysis:** Understand how prediction errors relate to time to station and other factors.
 - **Event & Weather Impact:** Analyze how external factors affect prediction accuracy.
+
+## Cost Optimization
+
+The system is optimized for cost efficiency:
+
+### Data Collection (Cloud Function)
+- Processes data in 1 hour 40 minute windows to capture even very late train journeys
+- Reduces BigQuery costs by limiting data scans
+- Daily processing cost: ~$0.12 to $0.25
+- Monthly cost: ~$3.60 to $7.50
+- Yearly cost: ~$43.20 to $90.00
+
+### Dashboard (Streamlit)
+- Uses Redis caching to store query results for 1 hour
+- Dashboard refreshes every hour for 14 hours per day
+- Processes 10-15 queries per refresh (140-210 queries daily)
+- Daily dashboard cost: ~$0.01 to $0.02
+- Monthly dashboard cost: ~$0.30 to $0.60
+- Yearly dashboard cost: ~$3.60 to $7.20
+
+Total System Cost:
+- Daily: ~$0.13 to $0.27
+- Monthly: ~$3.90 to $8.10
+- Yearly: ~$46.80 to $97.20
 
 ## Dashboard Tabs
 

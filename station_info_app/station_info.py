@@ -12,17 +12,14 @@ load_dotenv()
 # Get API keys from environment variables
 TFL_API_KEY = os.getenv('TFL_API_KEY')
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
-EVENTBRITE_API_KEY = os.getenv('EVENTBRITE_API_KEY')
 SKIDDLE_API_KEY = os.getenv('SKIDDLE_API_KEY')
 
-if not all([TFL_API_KEY, GOOGLE_API_KEY, EVENTBRITE_API_KEY, SKIDDLE_API_KEY]):
+if not all([TFL_API_KEY, GOOGLE_API_KEY, SKIDDLE_API_KEY]):
     raise ValueError("All API keys must be set in environment variables")
 
 def get_station_info(station_id: str, 
                     tfl_api_key: str,
                     google_api_key: str,
-                    eventbrite_api_key: str,
-                    skiddle_api_key: str,
                     radius: int = 500,
                     place_type: str = 'restaurant',
                     event_type: str = None):
@@ -50,19 +47,11 @@ def get_station_info(station_id: str,
             place_type='tourist_attraction'
         )
         
-        # Use Eventbrite API for events
-        events = get_events_near_station(
-            station_coords=station_coords,
-            api_key=eventbrite_api_key,
-            radius=radius,
-            event_type=event_type
-        )
         
         return {
             'facilities': facilities,
             'nearby_restaurants': restaurants,
             'nearby_attractions': attractions,
-            'upcoming_events': events,
             'place_type': place_type
         }
     return None
@@ -346,7 +335,7 @@ if __name__ == "__main__":
     
     # Set up Google Calendar API credentials
     flow = InstalledAppFlow.from_client_secrets_file(
-        '/Users/nicolas/repos/transport/credentials.json', SCOPES)
+        '/Users/nicolas/credentials.json', SCOPES)
     google_credentials = flow.run_local_server(port=0)
     
     # Available options for user input
@@ -391,7 +380,6 @@ if __name__ == "__main__":
         station_id=STATION_ID,
         tfl_api_key=TFL_API_KEY,
         google_api_key=GOOGLE_API_KEY,
-        eventbrite_api_key=EVENTBRITE_API_KEY,
         skiddle_api_key=SKIDDLE_API_KEY,
         place_type=place_type,
         event_type=event_type
