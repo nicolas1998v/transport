@@ -121,45 +121,28 @@ def get_cached_query(query):
     """Try Redis first, fall back to direct query if Redis fails."""
     try:
         cache_key = get_cache_key(query)
-        st.write(f"Redis client status: {'Connected' if redis_client is not None else 'Not connected'}")
         
         # Try Redis first
         if redis_client is not None:
             try:
                 cached_result = redis_client.get(cache_key)
-                st.write(f"Cache lookup result: {'Found' if cached_result is not None else 'Not found'}")
-                
                 if cached_result is not None:
-                    st.success(f"Cache HIT at {datetime.now().strftime('%H:%M:%S')}")
-                    try:
-                        # Decompress and parse the cached data
-                        df = decompress_data(cached_result)
-                        # Ensure numeric columns are numeric
-                        numeric_columns = ['accuracy_percentage', 'accuracy_percentage_60s', 'avg_error', 'avg_abs_error', 'total_predictions']
-                        for col in numeric_columns:
-                            if col in df.columns:
-                                df[col] = pd.to_numeric(df[col], errors='coerce')
-                        return df
-                    except Exception as e:
-                        st.warning(f"Error parsing cached data: {str(e)} - executing query")
-                        return client.query(query).to_dataframe()
+                    st.success("Using cached data (refreshes every hour)")
+                    return decompress_data(cached_result)
             except Exception as e:
-                st.warning(f"Redis error during get: {str(e)}")
+                st.warning(f"Redis error: {str(e)}")
         
         # If Redis fails or no cache hit, execute query
-        st.warning(f"Cache MISS at {datetime.now().strftime('%H:%M:%S')} - executing query")
+        st.warning("Cache miss - executing BigQuery (will cache for 1 hour)")
         result = client.query(query).to_dataframe()
         
         # Try to cache in Redis for next time
         if redis_client is not None:
             try:
-                # Compress data before caching
                 compressed_data = compress_data(result)
-                # Cache for 1 hour
-                redis_client.setex(cache_key, 3600, compressed_data)
-                st.info(f"Cached result in Redis with key: {cache_key}")
+                redis_client.setex(cache_key, 3600, compressed_data)  # 1 hour
             except Exception as e:
-                st.warning(f"Redis error during set: {str(e)}")
+                st.warning(f"Redis error: {str(e)}")
         
         return result
         
