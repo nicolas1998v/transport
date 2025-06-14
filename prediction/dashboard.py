@@ -1,59 +1,134 @@
 import streamlit as st
+
+# Set page config first
+st.set_page_config(page_title="Kings Cross Tube Prediction Analysis", layout="wide")
+
 import pandas as pd
-from google.cloud import bigquery
-from google.cloud import storage
-from google.oauth2 import service_account
 import plotly.express as px
-from datetime import datetime, timedelta
 import plotly.graph_objects as go
-import os
-from pathlib import Path
-from dotenv import load_dotenv
+from google.cloud import bigquery
+from google.oauth2 import service_account
+import redis
+import hashlib
+from io import StringIO
+import zlib
+import base64
 
-# Load environment variables (only affects local development)
-load_dotenv()
-
-# Initialize GCP client with credentials from Streamlit secrets or local credentials
+# Initialize GCP client with credentials from Streamlit secrets
 try:
-    # Streamlit Cloud automatically sets this environment variable
-    if os.getenv('STREAMLIT_CLOUD') == 'true':
-        # Streamlit Cloud
-        credentials = service_account.Credentials.from_service_account_info(
-            st.secrets["gcp_service_account"]
-        )
-    else:
-        # Local development
-        credentials_path = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
-        if not credentials_path:
-            raise ValueError("GOOGLE_APPLICATION_CREDENTIALS not found in .env file")
-        credentials = service_account.Credentials.from_service_account_file(
-            credentials_path
-        )
-    
-    client = bigquery.Client(credentials=credentials, project=credentials.project_id)
-    storage_client = storage.Client(credentials=credentials)
-    bucket = storage_client.bucket('london-transport-data')
+    credentials = service_account.Credentials.from_service_account_info(
+        st.secrets["gcp_service_account"]
+    )
+    project_id = credentials.project_id
+    client = bigquery.Client(credentials=credentials, project=project_id)
 except Exception as e:
     st.error("""
-    ⚠️ Error initializing Google Cloud client. Please check your credentials.
-    For local development, ensure GOOGLE_APPLICATION_CREDENTIALS is set in .env file
-    For Streamlit Cloud, ensure credentials are added in the secrets management section.
+    ⚠️ Error initializing Google Cloud client. Please check your credentials in Streamlit Cloud secrets.
+    Make sure you've added the credentials in the correct TOML format.
     """)
     st.error(str(e))
     st.stop()
 
-# Set page config
-st.set_page_config(page_title="Kings Cross Tube Prediction Analysis", layout="wide")
+# Initialize Redis connection
+redis_client = None
+try:
+    host = st.secrets["redis"]["host"]
+    port = int(st.secrets["redis"]["port"])
+    password = st.secrets["redis"]["password"]
+        
+    # Try connecting without SSL first
+    redis_client = redis.Redis(
+        host=host,
+        port=port,
+        password=password,
+        ssl=False,  # Try without SSL first
+        decode_responses=True,  # This will decode bytes to strings automatically
+        socket_timeout=5,
+        socket_connect_timeout=5
+    )
+    
+    if redis_client.ping():
+        print("Successfully connected to Redis without SSL")
+    else:
+        print("Failed to connect to Redis without SSL")
+        redis_client = None
+except Exception as e:
+    st.error(f"Error connecting to Redis without SSL: {str(e)}")
+    try:
+        # If that fails, try with SSL
+        redis_client = redis.Redis(
+            host=host,
+            port=port,
+            password=password,
+            ssl=True,
+            ssl_cert_reqs=None,
+            decode_responses=True,  # This will decode bytes to strings automatically
+            socket_timeout=5,
+            socket_connect_timeout=5
+        )
+        
+        if redis_client.ping():
+            st.success("Successfully connected to Redis with SSL")
+        else:
+            st.error("Failed to connect to Redis with SSL")
+            redis_client = None
+    except Exception as e:
+        st.error(f"Error connecting to Redis with SSL: {str(e)}")
+        redis_client = None
 
-# Initialize session state for last refresh time if it doesn't exist
-if 'last_refresh_time' not in st.session_state:
-    st.session_state.last_refresh_time = datetime.now()
+def normalize_query(query):
+    """Normalize query for consistent caching"""
+    # Remove extra whitespace and convert to lowercase
+    return ' '.join(query.lower().split())
 
-@st.cache_data(ttl=3600)  # Cache for 1 hour
-def run_query(query):
-    # Update the last refresh time when a query is run
-    st.session_state.last_refresh_time = datetime.now()
-    return client.query(query).to_dataframe()
+def get_cache_key(query):
+    """Generate a consistent cache key for a query."""
+    normalized_query = normalize_query(query)
+    key = f"query:{hashlib.md5(normalized_query.encode()).hexdigest()}"
+    return key
+
+def compress_data(data):
+    """Compress data before storing in Redis."""
+    json_str = data.to_json(orient='records', date_format='iso')
+    compressed = zlib.compress(json_str.encode())
+    return base64.b64encode(compressed).decode()
+
+def decompress_data(compressed_data):
+    """Decompress data retrieved from Redis."""
+    decoded = base64.b64decode(compressed_data)
+    decompressed = zlib.decompress(decoded)
+    return pd.read_json(StringIO(decompressed.decode()))
+
+def get_cached_query(query):
+    """Try Redis first, fall back to direct query if Redis fails."""
+    try:
+        cache_key = get_cache_key(query)
+        
+        # Try Redis first
+        if redis_client is not None:
+            try:
+                cached_result = redis_client.get(cache_key)
+                if cached_result is not None:
+                    return decompress_data(cached_result)
+            except Exception as e:
+                st.warning(f"Redis error: {str(e)}")
+        
+        # If Redis fails or no cache hit, execute query
+        result = client.query(query).to_dataframe()
+        
+        # Try to cache in Redis for next time
+        if redis_client is not None:
+            try:
+                compressed_data = compress_data(result)   
+                redis_client.setex(cache_key, 3600, compressed_data)  # 1 hour
+            except Exception as e:
+                st.warning(f"Redis error: {str(e)}")
+        
+        return result
+        
+    except Exception as e:
+        st.error(f"Error executing query: {str(e)}")
+        raise
 
 # Get counts from both tables
 count_query = """
@@ -61,12 +136,10 @@ SELECT
     (SELECT COUNT(*) FROM `nico-playground-384514.transport_predictions.initial_errors`) +
     (SELECT COUNT(*) FROM `nico-playground-384514.transport_predictions.any_errors`) as total_count
 """
-count_df = run_query(count_query)
+count_df = get_cached_query(count_query)
 total_count = count_df['total_count'].iloc[0]
 
-# Display refresh info and counts
-last_refresh = (st.session_state.last_refresh_time + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
-st.info(f"Data refreshes every hour. Last refreshed: {last_refresh} | Total observations: {total_count:,}")
+st.info(f"Data is cached and updates every hour | Total observations: {total_count:,}")
 
 # Create tabs
 tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13 = st.tabs([
@@ -295,12 +368,6 @@ def rename_station(station):
     """Rename station according to mapping"""
     return STATION_RENAMES.get(station, station)
 
-@st.cache_data(ttl=3600)  # Cache for 1 hour
-def run_query(query):
-    # Update the last refresh time when a query is run
-    st.session_state.last_refresh_time = datetime.now()
-    return client.query(query).to_dataframe()
-
 with tab1:
     st.header("Prediction Error Analysis")
     
@@ -336,7 +403,7 @@ with tab1:
     FROM `nico-playground-384514.transport_predictions.any_errors`
     """
     
-    accuracy_results = run_query(accuracy_query)
+    accuracy_results = get_cached_query(accuracy_query)
     
     if not accuracy_results.empty:
         col1, col2 = st.columns(2)
@@ -353,8 +420,23 @@ with tab1:
             help=f"Based on {accuracy_results.iloc[0]['total_predictions']:.0f} predictions"
         )
     
+        # Query for initial predictions by direction
+    any_prediction_query = """
+    SELECT 
+        train_id,
+        direction,
+        CAST(error_seconds AS FLOAT64) as error_seconds,
+        CAST(time_to_station AS FLOAT64) as time_to_station,
+        line,
+        FORMAT_TIMESTAMP('%Y-%m-%d %H:%M:%S', any_prediction_timestamp) as any_prediction_timestamp,
+        FORMAT_TIMESTAMP('%Y-%m-%d %H:%M:%S', arrival_timestamp) as arrival_timestamp
+    FROM `nico-playground-384514.transport_predictions.any_errors`
+    ORDER BY direction, line
+    """
+
+    
     # Query for scatter plot with run information
-    query = """
+    run_query = """
     WITH time_gaps AS (
     SELECT 
             train_id,
@@ -371,6 +453,7 @@ with tab1:
                 ELSE 0
             END as new_run
     FROM `nico-playground-384514.transport_predictions.any_errors`
+    WHERE timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 10 HOUR)
     ),
     run_numbers AS (
         SELECT 
@@ -395,16 +478,18 @@ with tab1:
     FROM `nico-playground-384514.transport_predictions.any_errors` e
     JOIN run_numbers r
     ON e.train_id = r.train_id AND e.timestamp = r.timestamp
+    WHERE e.timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 10 HOUR)
     ORDER BY e.timestamp
     """
     
-    df = run_query(query)
+    df = get_cached_query(run_query)
+    df_any_prediction = get_cached_query(any_prediction_query)
     
     if not df.empty:
         # Add train_id filter
         train_ids = sorted(df['train_id'].unique())
         selected_train_id_2 = st.selectbox(
-            "Select Train ID to Highlight",
+            "Select Train ID to Highlight - Runs dating the last 10 hours",
             options=['All'] + list(train_ids),
             index=0,
             key='train_id_selectbox'
@@ -519,7 +604,7 @@ with tab1:
                 hovermode='closest'        )
         
         else:
-            inbound_data = df[df['direction'] == 'inbound'].copy()
+            inbound_data = df_any_prediction[df_any_prediction['direction'] == 'inbound'].copy()
         
             if not inbound_data.empty:
             # Create scatter plot with trend line
@@ -562,7 +647,7 @@ with tab1:
             }
             fig_inbound.for_each_trace(lambda t: t.update(name=legend_labels.get(t.name, t.name)))
 
-            outbound_data = df[df['direction'] == 'outbound'].copy()
+            outbound_data = df_any_prediction[df_any_prediction['direction'] == 'outbound'].copy()
         
             if not outbound_data.empty:
             # Create scatter plot with trend line
@@ -824,7 +909,7 @@ with tab2:
     FROM `nico-playground-384514.transport_predictions.initial_errors`
     """
     
-    accuracy_results = run_query(accuracy_query)
+    accuracy_results = get_cached_query(accuracy_query)
     
     if not accuracy_results.empty:
         col1, col2 = st.columns(2)
@@ -857,7 +942,7 @@ with tab2:
     ORDER BY direction, line
     """
     
-    initial_direction_results = run_query(initial_direction_query)
+    initial_direction_results = get_cached_query(initial_direction_query)
     
     if initial_direction_results.empty:
         st.warning("No data available for analysis")
@@ -1051,7 +1136,7 @@ with tab2:
             st.subheader("Outbound Statistics")
             st.write("3000 observations per line")
             # Sample 3000 predictions per line
-            sampled_data_outbound = outbound_data.groupby('line').apply(lambda x: x.sample(n=min(300, len(x)), random_state=42)).reset_index(drop=True)
+            sampled_data_outbound = outbound_data.groupby('line').apply(lambda x: x.sample(n=min(3000, len(x)), random_state=42)).reset_index(drop=True)
             col1, col2, col3 = st.columns(3)
         with col1:
                 st.metric("Average Error", f"{sampled_data_outbound['error_seconds'].mean():.0f} seconds")
@@ -1164,7 +1249,7 @@ with tab3:
         ORDER BY accuracy_percentage DESC
         """
         
-        line_df = run_query(line_query)
+        line_df = get_cached_query(line_query)
         
         if not line_df.empty:
             # Line performance bar chart
@@ -1197,7 +1282,7 @@ with tab3:
             ORDER BY hour
             """
             
-            time_df = run_query(time_query)
+            time_df = get_cached_query(time_query)
             
             if not time_df.empty:
                 fig = px.line(
@@ -1231,7 +1316,7 @@ with tab3:
         ORDER BY accuracy_percentage DESC
         """
         
-        line_df = run_query(line_query)
+        line_df = get_cached_query(line_query)
         
         if not line_df.empty:
             # Line performance bar chart
@@ -1263,7 +1348,7 @@ with tab3:
             ORDER BY hour
             """
             
-            time_df = run_query(time_query)
+            time_df = get_cached_query(time_query)
             
             if not time_df.empty:
                 fig = px.line(
@@ -1298,7 +1383,7 @@ with tab3:
         ORDER BY day_of_week
         """
         
-        day_df = run_query(day_query)
+        day_df = get_cached_query(day_query)
         
         if not day_df.empty:
             # Create a mapping of day numbers to names
@@ -1341,7 +1426,7 @@ with tab3:
         ORDER BY day_of_week
         """
         
-        day_df = run_query(day_query)
+        day_df = get_cached_query(day_query)
         
         if not day_df.empty:
             # Create a mapping of day numbers to names
@@ -1388,13 +1473,9 @@ with tab3:
             ORDER BY line, day_of_week
             """
 
-    day_line_df = run_query(day_line_query)
+    day_line_df = get_cached_query(day_line_query)
     
     if not day_line_df.empty:
-        # Convert numeric columns to float
-        numeric_columns = ['accuracy_percentage', 'accuracy_percentage_60s', 'avg_error', 'avg_abs_error']
-        for col in numeric_columns:
-            day_line_df[col] = pd.to_numeric(day_line_df[col], errors='coerce')
         
         # Create a mapping of day numbers to names (1-7)
         day_names = {
@@ -1406,16 +1487,21 @@ with tab3:
             6: 'Saturday',
             7: 'Sunday'
         }
-        
+
+        if not day_line_df.empty:
+        # Convert numeric columns to float
+            numeric_columns = ['accuracy_percentage', 'accuracy_percentage_60s', 'avg_error', 'avg_abs_error']
+        for col in numeric_columns:
+            day_line_df[col] = pd.to_numeric(day_line_df[col], errors='coerce')
+ 
         # Map day numbers to names
         day_line_df['day_name'] = day_line_df['day_of_week'].map(day_names)
-        
-        
+
         # Create complete index and columns for all combinations
         all_lines = sorted(day_line_df['line'].unique())
         all_days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
         
-        # First aggregate any duplicate entries - use first() for error values
+        # First aggregate any duplicate entries - use first() for error metrics
         agg_df = day_line_df.groupby(['line', 'day_name']).agg({
             'accuracy_percentage': 'mean',
             'accuracy_percentage_60s': 'mean',
@@ -1552,7 +1638,7 @@ with tab4:
         line
     """
     
-    precision_df = run_query(precision_query)
+    precision_df = get_cached_query(precision_query)
     
     if not precision_df.empty:
         # Create a line chart showing accuracy by time bin (±30s)
@@ -1719,7 +1805,7 @@ with tab5:
     ORDER BY line, total_predictions DESC
     """
     
-    location_df = run_query(location_query)
+    location_df = get_cached_query(location_query)
     
     if not location_df.empty:
         # Create a line selector
@@ -1904,7 +1990,7 @@ with tab6:
     ORDER BY line, direction
     """
     
-    direction_df = run_query(direction_query)
+    direction_df = get_cached_query(direction_query)
     
     if not direction_df.empty:
         # Create a line selector
@@ -2015,7 +2101,7 @@ with tab7:
         line
     """
     
-    peak_df = run_query(peak_query)
+    peak_df = get_cached_query(peak_query)
     
     if not peak_df.empty:
         # Create a grouped bar chart showing accuracy by time period and line
@@ -2121,7 +2207,7 @@ with tab8:
     ORDER BY line, error_type
     """
     
-    error_df = run_query(error_pattern_query)
+    error_df = get_cached_query(error_pattern_query)
     
     if not error_df.empty:
         # Create stacked bar chart for error types by line
@@ -2194,7 +2280,7 @@ with tab9:
     ORDER BY date, line
     """
     
-    drift_df = run_query(drift_query)
+    drift_df = get_cached_query(drift_query)
     
     if not drift_df.empty:
         # Create line chart for accuracy over time
@@ -2222,19 +2308,26 @@ with tab9:
             # Calculate overall trend
             overall_trend = drift_df.groupby('date')['accuracy_percentage'].mean().reset_index()
             if len(overall_trend) > 1:
-                first_week = overall_trend.head(7)['accuracy_percentage'].mean()
-                last_week = overall_trend.tail(7)['accuracy_percentage'].mean()
-                trend = last_week - first_week
-                st.metric(
-                    "Overall Accuracy Trend",
-                    f"{trend:+.1f}%",
-                    "Change in last 7 days vs previous 7 days"
-                )
+                # Sort by date to ensure correct order
+                overall_trend = overall_trend.sort_values('date')
+                # Get the last 14 days
+                last_14_days = overall_trend.tail(14)
+                if len(last_14_days) >= 14:
+                    # Split into two weeks
+                    last_week = last_14_days.tail(7)['accuracy_percentage'].mean()
+                    previous_week = last_14_days.head(7)['accuracy_percentage'].mean()
+                    trend = last_week - previous_week
+                    st.metric(
+                        "Overall Accuracy Trend",
+                        f"{trend:+.1f}%",
+                        "Change in last 7 days vs previous 7 days"
+                    )
         
         with col2:
             # Most improved line
             line_trends = drift_df.groupby('line').apply(
-                lambda x: x.tail(7)['accuracy_percentage'].mean() - x.head(7)['accuracy_percentage'].mean()
+                lambda x: x.sort_values('date').tail(14).tail(7)['accuracy_percentage'].mean() - 
+                         x.sort_values('date').tail(14).head(7)['accuracy_percentage'].mean()
             ).sort_values(ascending=False)
             if not line_trends.empty:
                 st.metric(
@@ -2308,8 +2401,8 @@ with tab10:
     ORDER BY date
     """
     
-    stats_df = run_query(stats_query)
-    anomaly_df = run_query(anomaly_query)
+    stats_df = get_cached_query(stats_query)
+    anomaly_df = get_cached_query(anomaly_query)
     
     if not anomaly_df.empty:
         # Create scatter plot for anomalies
@@ -2368,20 +2461,22 @@ with tab10:
         # Calculate statistics per line
         line_stats = anomaly_df.groupby('line').agg({
             'avg_error': ['count', 'mean'],
-            'accuracy_percentage': 'mean'
+            'accuracy_percentage': 'mean',
+            'total_predictions': 'sum'
         }).reset_index()
         
         # Rename columns for clarity
-        line_stats.columns = ['Line', 'Number of Anomalies', 'Average Absolute Error (s)', 'Average Accuracy (%)']
+        line_stats.columns = ['Line', 'Number of Anomalies', 'Average Error (s)', 'Average Accuracy (%)', 'Total Predictions']
         
-        # Sort by number of anomalies
+        # Sort by total predictions
         line_stats = line_stats.sort_values('Number of Anomalies', ascending=False)
         
         # Display as a table
         st.dataframe(
             line_stats.style.format({
-                'Average Absolute Error (s)': '{:.1f}',
-                'Average Accuracy (%)': '{:.1f}'
+                'Average Error (s)': '{:.1f}',
+                'Average Accuracy (%)': '{:.1f}',
+                'Total Predictions': '{:,.0f}'
             }),
             use_container_width=True
         )
@@ -2429,7 +2524,7 @@ with tab11:
     ORDER BY interaction_count DESC
     """
     
-    interaction_df = run_query(interaction_query)
+    interaction_df = get_cached_query(interaction_query)
     
     if not interaction_df.empty:
         # Create heatmap for line interactions
@@ -2525,7 +2620,7 @@ with tab12:
     ORDER BY w.timestamp DESC
     """
     
-    weather_df = run_query(weather_query)
+    weather_df = get_cached_query(weather_query)
     
     if not weather_df.empty:
         # First row: Bar plots for weather condition and temperature bins
@@ -2534,7 +2629,7 @@ with tab12:
         with col1:
             # Weather Condition vs Accuracy
             weather_accuracy = weather_df.groupby('weather_condition').agg({
-                'accuracy_percentage': lambda x: round(x.mean(), 1),
+                'accuracy_percentage': 'mean',
                 'total_predictions': 'sum',
                 'avg_error': lambda x: round((x * weather_df.loc[x.index, 'total_predictions']).sum() / weather_df.loc[x.index, 'total_predictions'].sum(), 1),
                 'avg_abs_error': lambda x: round((x * weather_df.loc[x.index, 'total_predictions']).sum() / weather_df.loc[x.index, 'total_predictions'].sum(), 1)
@@ -2567,7 +2662,7 @@ with tab12:
                                           labels=temp_labels)
             
             temp_bin_stats = weather_df.groupby('temp_bin').agg({
-                'accuracy_percentage': lambda x: round(x.mean(), 1),
+                'accuracy_percentage': 'mean',
                 'total_predictions': 'sum',
                 'avg_error': lambda x: round(x.mean(), 1),
                 'avg_abs_error': lambda x: round(x.mean(), 1)
@@ -2828,7 +2923,7 @@ with tab13:
     CROSS JOIN anomaly_counts a
     ORDER BY date, hour, line
     """
-    event_df = run_query(event_query)
+    event_df = get_cached_query(event_query)
     
     if not event_df.empty:
         # Check if we have any event days
