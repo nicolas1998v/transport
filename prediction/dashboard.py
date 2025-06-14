@@ -492,6 +492,7 @@ with tab1:
                 ELSE 0
             END as new_run
     FROM `nico-playground-384514.transport_predictions.any_errors`
+    WHERE timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 10 HOUR)
     ),
     run_numbers AS (
         SELECT 
@@ -516,6 +517,7 @@ with tab1:
     FROM `nico-playground-384514.transport_predictions.any_errors` e
     JOIN run_numbers r
     ON e.train_id = r.train_id AND e.timestamp = r.timestamp
+    WHERE e.timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 10 HOUR)
     ORDER BY e.timestamp
     """
     
