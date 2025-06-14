@@ -2311,7 +2311,7 @@ with tab9:
                     f"{line_trends.index[0]} ({line_trends.iloc[0]:+.1f}%)",
                     "Change in last 7 days vs previous 7 days"
                 )
-                
+
 with tab10:
     st.header("Anomaly Detection")
     
@@ -2435,7 +2435,7 @@ with tab10:
         st.subheader("Summary Statistics by Line")
         
         # Calculate statistics per line
-        line_stats = anomaly_df.groupby(('line',)).agg({
+        line_stats = anomaly_df.groupby('line').agg({
             'avg_error': ['mean', 'std'],
             'accuracy_percentage': 'mean',
             'total_predictions': 'sum'
