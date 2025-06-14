@@ -27,6 +27,9 @@ except Exception as e:
     st.error(str(e))
     st.stop()
 
+# Set page config first
+st.set_page_config(page_title="Kings Cross Tube Prediction Analysis", layout="wide")
+
 # Initialize Redis connection
 redis_client = None
 try:
@@ -121,9 +124,6 @@ def get_cached_query(query):
     except Exception as e:
         st.error(f"Error executing query: {str(e)}")
         raise
-
-# Set page config
-st.set_page_config(page_title="Kings Cross Tube Prediction Analysis", layout="wide")
 
 # Get counts from both tables
 count_query = """
