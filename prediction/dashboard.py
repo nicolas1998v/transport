@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 import redis
 from datetime import datetime
 import hashlib
+from io import StringIO
 
 # Initialize GCP client with credentials from Streamlit secrets
 try:
@@ -94,8 +95,8 @@ def get_cached_query(query):
                 cached_result = redis_client.get(cache_key)
                 if cached_result is not None:
                     st.success(f"Cache HIT at {datetime.now().strftime('%H:%M:%S')}")
-                    # Parse the JSON string back to DataFrame
-                    df = pd.read_json(cached_result)
+                    # Parse the JSON string back to DataFrame using StringIO
+                    df = pd.read_json(StringIO(cached_result))
                     # Ensure numeric columns are numeric
                     numeric_columns = ['accuracy_percentage', 'accuracy_percentage_60s', 'avg_error', 'avg_abs_error', 'total_predictions']
                     for col in numeric_columns:
