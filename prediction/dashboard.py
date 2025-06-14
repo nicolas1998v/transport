@@ -82,7 +82,9 @@ except Exception as e:
 
 def get_cache_key(query):
     """Generate a consistent cache key for a query."""
-    return f"query:{hashlib.md5(query.encode()).hexdigest()}"
+    key = f"query:{hashlib.md5(query.encode()).hexdigest()}"
+    st.write(f"Generated cache key: {key}")  # Debug print
+    return key
 
 def get_cached_query(query):
     """Try Redis first, fall back to direct query if Redis fails."""
@@ -116,7 +118,7 @@ def get_cached_query(query):
                 # Cache for 1 hour
                 json_str = result.to_json(orient='records', date_format='iso')
                 redis_client.setex(cache_key, 3600, json_str)
-                st.info("Cached result in Redis")
+                st.info(f"Cached result in Redis with key: {cache_key}")  # Debug print
             except Exception as e:
                 st.warning(f"Failed to cache: {str(e)}")
         
@@ -679,7 +681,7 @@ with tab1:
         st.subheader("Inbound Statistics")
         st.write("3000 observations per line")
         # Sample 3000 predictions per line
-        sampled_data_inbound = inbound_data.groupby('line', observed=True).apply(lambda x: x.sample(n=min(3000, len(x)), random_state=42), include_groups=False).reset_index(drop=True)
+        sampled_data_inbound = inbound_data.groupby('line').apply(lambda x: x.sample(n=min(3000, len(x)), random_state=42)).reset_index(drop=True)
         col1, col2, col3 = st.columns(3)
         with col1:
                 st.metric("Average Error", f"{sampled_data_inbound['error_seconds'].mean():.0f} seconds")
@@ -776,7 +778,7 @@ with tab1:
         st.subheader("Outbound Statistics")
         st.write("3000 observations per line")
             # Sample 3000 predictions per line
-        sampled_data_outbound = outbound_data.groupby('line', observed=True).apply(lambda x: x.sample(n=min(3000, len(x)), random_state=42), include_groups=False).reset_index(drop=True)
+        sampled_data_outbound = outbound_data.groupby('line').apply(lambda x: x.sample(n=min(3000, len(x)), random_state=42)).reset_index(drop=True)
         col1, col2, col3 = st.columns(3)
         with col1:
                 st.metric("Average Error", f"{sampled_data_outbound['error_seconds'].mean():.0f} seconds")
@@ -977,7 +979,7 @@ with tab2:
         st.write("3000 observations per line")
         
         # Sample 1000 predictions per line
-        sampled_data_inbound = inbound_data.groupby('line', observed=True).apply(lambda x: x.sample(n=min(300, len(x)), random_state=42), include_groups=False).reset_index(drop=True)
+        sampled_data_inbound = inbound_data.groupby('line').apply(lambda x: x.sample(n=min(300, len(x)), random_state=42)).reset_index(drop=True)
         col1, col2, col3 = st.columns(3)
         with col1:
                 st.metric("Average Error", f"{sampled_data_inbound['error_seconds'].mean():.0f} seconds")
@@ -1115,7 +1117,7 @@ with tab2:
             st.subheader("Outbound Statistics")
             st.write("3000 observations per line")
             # Sample 3000 predictions per line
-            sampled_data_outbound = outbound_data.groupby('line', observed=True).apply(lambda x: x.sample(n=min(3000, len(x)), random_state=42), include_groups=False).reset_index(drop=True)
+            sampled_data_outbound = outbound_data.groupby('line').apply(lambda x: x.sample(n=min(3000, len(x)), random_state=42)).reset_index(drop=True)
             col1, col2, col3 = st.columns(3)
         with col1:
                 st.metric("Average Error", f"{sampled_data_outbound['error_seconds'].mean():.0f} seconds")
@@ -2116,7 +2118,7 @@ with tab7:
         st.subheader("Summary Statistics by Time Period")
         
         # Calculate overall statistics for each time period
-        period_stats = peak_df.groupby('time_period', observed=True).agg({
+        period_stats = peak_df.groupby('time_period').agg({
             'total_predictions': 'sum',
             'accuracy_percentage': 'mean',
             'avg_error': lambda x: (x * peak_df.loc[x.index, 'total_predictions']).sum() / peak_df.loc[x.index, 'total_predictions'].sum()
@@ -2287,7 +2289,7 @@ with tab9:
         
         with col1:
             # Calculate overall trend
-            overall_trend = drift_df.groupby('date', observed=True)['accuracy_percentage'].mean().reset_index()
+            overall_trend = drift_df.groupby('date')['accuracy_percentage'].mean().reset_index()
             if len(overall_trend) > 1:
                 first_week = overall_trend.head(7)['accuracy_percentage'].mean()
                 last_week = overall_trend.tail(7)['accuracy_percentage'].mean()
@@ -2300,17 +2302,16 @@ with tab9:
         
         with col2:
             # Most improved line
-            line_trends = drift_df.groupby('line', observed=True).apply(
-                lambda x: x.sort_values('date')['accuracy_percentage'].tolist(),
-                include_groups=False
-            ).reset_index()
+            line_trends = drift_df.groupby('line').apply(
+                lambda x: x.tail(7)['accuracy_percentage'].mean() - x.head(7)['accuracy_percentage'].mean()
+            ).sort_values(ascending=False)
             if not line_trends.empty:
                 st.metric(
                     "Most Improved Line",
-                    f"{line_trends['line'][0]} ({line_trends['accuracy_percentage'][0]:+.1f}%)",
+                    f"{line_trends.index[0]} ({line_trends.iloc[0]:+.1f}%)",
                     "Change in last 7 days vs previous 7 days"
                 )
-
+                
 with tab10:
     st.header("Anomaly Detection")
     
@@ -2434,7 +2435,7 @@ with tab10:
         st.subheader("Summary Statistics by Line")
         
         # Calculate statistics per line
-        line_stats = anomaly_df.groupby(('line',), observed=True).agg({
+        line_stats = anomaly_df.groupby(('line',)).agg({
             'avg_error': ['mean', 'std'],
             'accuracy_percentage': 'mean',
             'total_predictions': 'sum'
@@ -2602,7 +2603,7 @@ with tab12:
         
         with col1:
             # Weather Condition vs Accuracy
-            weather_accuracy = weather_df.groupby('weather_condition', observed=True).agg({
+            weather_accuracy = weather_df.groupby('weather_condition').agg({
                 'accuracy_percentage': 'mean',
                 'total_predictions': 'sum',
                 'avg_error': lambda x: round((x * weather_df.loc[x.index, 'total_predictions']).sum() / weather_df.loc[x.index, 'total_predictions'].sum(), 1),
@@ -2635,7 +2636,7 @@ with tab12:
                                           bins=temp_bins,
                                           labels=temp_labels)
             
-            temp_bin_stats = weather_df.groupby('temp_bin', observed=True).agg({
+            temp_bin_stats = weather_df.groupby('temp_bin').agg({
                 'accuracy_percentage': 'mean',
                 'total_predictions': 'sum',
                 'avg_error': lambda x: round(x.mean(), 1),
@@ -2666,7 +2667,7 @@ with tab12:
                 bins=[-float('inf'), 5, 10, 15, 20, float('inf')],
                 labels=['0-5 mph', '5-10 mph', '10-15 mph', '15-20 mph', '20+ mph']
             )
-            wind_group = weather_df.groupby(wind_bins, observed=True).agg({
+            wind_group = weather_df.groupby(wind_bins).agg({
                 'accuracy_percentage': 'mean',
                 'total_predictions': 'sum',
                 'avg_error': lambda x: round(x.mean(), 1),
@@ -2691,7 +2692,7 @@ with tab12:
                 bins=[-float('inf'), 0, 0.5, 2, 4, float('inf')],
                 labels=['No Rain', 'Light Rain (<0.5mm)', 'Moderate Rain (0.5-2mm)', 'Heavy Rain (2-4mm)', 'Very Heavy Rain (>4mm)']
             )
-            precip_group = weather_df.groupby(precip_bins, observed=True).agg({
+            precip_group = weather_df.groupby(precip_bins).agg({
                 'accuracy_percentage': 'mean',
                 'total_predictions': 'sum',
                 'avg_error': lambda x: round(x.mean(), 1),
@@ -2913,7 +2914,7 @@ with tab13:
             )
             
             # Calculate average metrics by event category
-            category_stats = event_df.groupby(['event_category', 'line'], observed=True).agg({
+            category_stats = event_df.groupby(['event_category', 'line']).agg({
                 'accuracy_percentage': 'mean',
                 'avg_abs_error': 'mean',
                 'total_predictions': 'sum'
@@ -2953,7 +2954,7 @@ with tab13:
             
             # Show venue statistics during event windows
             st.subheader("Venue Performance During Event Windows (2 hours before and 4 hours after start)")
-            venue_stats = event_df[event_df['time_window'] == 'Event Window'].groupby('venue_name', observed=True).agg({
+            venue_stats = event_df[event_df['time_window'] == 'Event Window'].groupby('venue_name').agg({
                 'total_predictions': 'sum',
                 'accuracy_percentage': 'mean',
                 'avg_abs_error': 'mean'
