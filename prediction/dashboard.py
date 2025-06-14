@@ -1,7 +1,11 @@
 import streamlit as st
 
-# Set page config first
-st.set_page_config(page_title="Kings Cross Tube Prediction Analysis", layout="wide")
+# Set page config first, before any other Streamlit commands
+st.set_page_config(
+    page_title="Kings Cross Tube Prediction Analysis",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
 import pandas as pd
 import plotly.express as px
