@@ -147,7 +147,7 @@ def load_latest_results():
                 available_batches.append(2)
             
             if not all_data:
-                st.warning(f"No batch files found for hour {target_hour}")
+                st.warning(f"Dashboard closed for today ! Come back tomorrow ! 😎")
                 return None
                 
             # Load postcode coordinates

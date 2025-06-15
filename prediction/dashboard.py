@@ -427,6 +427,7 @@ with tab1:
         CAST(error_seconds AS FLOAT64) as error_seconds,
         CAST(time_to_station AS FLOAT64) as time_to_station,
         line,
+        current_location,
         FORMAT_TIMESTAMP('%Y-%m-%d %H:%M:%S', any_prediction_timestamp) as any_prediction_timestamp,
         FORMAT_TIMESTAMP('%Y-%m-%d %H:%M:%S', arrival_timestamp) as arrival_timestamp
     FROM `nico-playground-384514.transport_predictions.any_errors`
@@ -468,6 +469,7 @@ with tab1:
         CAST(e.time_to_station AS FLOAT64) as time_to_station,
         e.line,
         e.train_id,
+        e.current_location,
         r.run_number,
         r.any_prediction_timestamp,
         r.arrival_timestamp,
@@ -544,9 +546,10 @@ with tab1:
                     'train_id': 'Train ID',
                     'run_number': 'Run Number',
                     'any_prediction_timestamp': 'Prediction Timestamp',
-                    'arrival_timestamp': 'Arrival Timestamp'
+                    'arrival_timestamp': 'Arrival Timestamp',
+                    'current_location': 'Location'
                 },
-                hover_data=['train_id', 'run_number', 'any_prediction_timestamp','arrival_timestamp']
+                hover_data=['train_id', 'run_number', 'any_prediction_timestamp','arrival_timestamp', 'current_location']
             )
             
             # Update marker size and opacity for background points
@@ -581,13 +584,14 @@ with tab1:
                         "Train ID: " + selected_train_id_2 + "<br>" +
                         "Run: " + str(run_num) + "<br>" +
                         "Prediction Timestamp: %{text}<br>" +
-                        "Arrival Timestamp: %{customdata}<br>" +
+                        "Arrival Timestamp: %{customdata[0]}<br>" +
                         "Time to Station: %{y:.0f} seconds<br>" +
                         "Error: %{x:.0f} seconds<br>" +
+                        "Location: %{customdata[1]}<br>" +
                         "<extra></extra>"
                     ),
                     text=run_data['any_prediction_timestamp'],
-                    customdata=run_data['arrival_timestamp']
+                    customdata=run_data[['arrival_timestamp', 'current_location']].values
                 ))
         
                 # Update layout for better visibility
@@ -620,8 +624,9 @@ with tab1:
                 'time_to_station': 'Time to Station (seconds)',
                 'line': 'Tube Line',
                 'any_prediction_timestamp': 'Prediction Timestamp',
-                'train_id': 'Train ID'},
-                hover_data=['train_id','any_prediction_timestamp','arrival_timestamp'],
+                'train_id': 'Train ID',
+                'current_location': 'Location of train'},
+                hover_data=['train_id','current_location','any_prediction_timestamp','arrival_timestamp'],
                 category_orders={
                     'line': ['metropolitan', 'hammersmith-city', 'northern', 'piccadilly', 'victoria']
                 }
@@ -661,10 +666,11 @@ with tab1:
                 'time_to_station': 'Time to Station (seconds)',
                 'line': 'Tube Line',
                     'any_prediction_timestamp': 'Prediction Timestamp',
-                    'train_id': 'Train ID'
+                    'train_id': 'Train ID',
+                    'current_location': 'Location of train'
 
                 },
-                hover_data=['train_id', 'any_prediction_timestamp','arrival_timestamp'],
+                hover_data=['train_id', 'current_location','any_prediction_timestamp','arrival_timestamp'],
                 category_orders={
                     'line': ['metropolitan', 'hammersmith-city', 'northern', 'piccadilly', 'victoria']
                 }
