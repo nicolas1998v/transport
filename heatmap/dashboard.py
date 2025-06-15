@@ -173,7 +173,7 @@ def load_latest_results():
         return None
 
 st.title('London Journey Times from Houses of Parliament')
-st.caption('Journey times from SW1A 2JR to all London postcodes')
+st.caption('Fastest journey times from SW1A 2JR to all London postcodes, on tube, bus and walking')
 
 # Update the timestamp display
 results = load_latest_results()
