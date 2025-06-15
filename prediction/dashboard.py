@@ -118,7 +118,7 @@ def get_cached_query(query):
         if redis_client is not None:
             try:
                 compressed_data = compress_data(result)   
-                redis_client.setex(cache_key, 3600, compressed_data)  # 1 hour
+                redis_client.setex(cache_key, 43200, compressed_data)  # 12 hours
             except Exception as e:
                 st.warning(f"Redis error: {str(e)}")
         
@@ -137,7 +137,7 @@ SELECT
 count_df = get_cached_query(count_query)
 total_count = count_df['total_count'].iloc[0]
 
-st.info(f"Data is cached and updates every hour | Total observations: {total_count:,}")
+st.info(f"Data is cached and updates every 12 hours | Total observations: {total_count:,}")
 st.title("Kings Cross Tube Prediction Analysis")
 
 # Create tabs
@@ -419,7 +419,7 @@ with tab1:
             help=f"Based on {accuracy_results.iloc[0]['total_predictions']:.0f} predictions"
         )
     
-        # Query for initial predictions by direction
+        # Query for any predictions by direction
     any_prediction_query = """
     SELECT 
         train_id,
@@ -625,7 +625,7 @@ with tab1:
                 'line': 'Tube Line',
                 'any_prediction_timestamp': 'Prediction Timestamp',
                 'train_id': 'Train ID',
-                'current_location': 'Location of train'},
+                'current_location': 'Train location'},
                 hover_data=['train_id','current_location','any_prediction_timestamp','arrival_timestamp'],
                 category_orders={
                     'line': ['metropolitan', 'hammersmith-city', 'northern', 'piccadilly', 'victoria']
@@ -667,7 +667,7 @@ with tab1:
                 'line': 'Tube Line',
                     'any_prediction_timestamp': 'Prediction Timestamp',
                     'train_id': 'Train ID',
-                    'current_location': 'Location of train'
+                    'current_location': 'Train location'
 
                 },
                 hover_data=['train_id', 'current_location','any_prediction_timestamp','arrival_timestamp'],
@@ -748,11 +748,11 @@ with tab1:
                 'error_rate_per_minute_abs': error_rate_per_minute_abs
             })
 
-        # Sort both lists by absolute correlation
-        line_correlations.sort(key=lambda x: abs(x['correlation']), reverse=True)
-        line_correlations_abs.sort(key=lambda x: abs(x['correlation_abs']), reverse=True)
+            # Sort both lists by absolute correlation
+            line_correlations.sort(key=lambda x: abs(x['correlation']), reverse=True)
+            line_correlations_abs.sort(key=lambda x: abs(x['correlation_abs']), reverse=True)
 
-        # Display line-specific insights
+    # Display line-specific insights
         st.subheader("Correlation Analysis")
         for line_data in line_correlations:
             correlation = line_data['correlation']
@@ -760,7 +760,7 @@ with tab1:
             avg_error = line_data['avg_error']
             avg_time = line_data['avg_time']
             error_rate = line_data['error_rate_per_minute']
-            
+        
             if abs(correlation) > 0.5:
                 strength = "strong" if abs(correlation) > 0.7 else "moderate"
                 direction = "positive" if correlation > 0 else "negative"
@@ -894,8 +894,8 @@ with tab2:
     The initial prediction is the first prediction of a train when first arriving in the dataset, at least 20 minutes after that said train was last seen (as trains eventually come back into the radar).  
     As such, the predictions in the last tab where all of those after these ones.
                 
-    Interestingly, the correlations here come with a different ranking than those in the first tab.
-                  
+    Interestingly, the correlations here come with a different ranking than those in the first tab.  
+                
     After analysing both tabs, it seems that when lines first predict early and with some buffer time, the recalibration is smoother and more succesful than when they first predict later on. It seems that it is that extra few minutes in betwen initial predictions that grant predicitons extra leg room.
                 
     """)
@@ -938,6 +938,7 @@ with tab2:
         CAST(error_seconds AS FLOAT64) as error_seconds,
         CAST(time_to_station AS FLOAT64) as time_to_station,
         line,
+        current_location,
         FORMAT_TIMESTAMP('%Y-%m-%d %H:%M:%S', initial_prediction_timestamp) as initial_prediction_timestamp,
         FORMAT_TIMESTAMP('%Y-%m-%d %H:%M:%S', arrival_timestamp) as arrival_timestamp
     FROM `nico-playground-384514.transport_predictions.initial_errors`
@@ -968,9 +969,10 @@ with tab2:
                     'line': 'Tube Line',
                     'arrival_timestamp': 'Arrival Time',
                     'initial_prediction_timestamp': 'Initial Prediction Time',
-                    'train_id': 'Train ID'
+                    'train_id': 'Train ID',
+                    'current_location': 'Train location'
                 },
-                hover_data=['initial_prediction_timestamp','arrival_timestamp','train_id'],
+                hover_data=['current_location','initial_prediction_timestamp','arrival_timestamp','train_id'],
                 category_orders={
                     'line': ['metropolitan', 'hammersmith-city', 'northern', 'piccadilly', 'victoria']
                 }
@@ -1060,7 +1062,7 @@ with tab2:
             avg_error = line_data['avg_error']
             avg_time = line_data['avg_time']
             error_rate = line_data['error_rate_per_minute']
-            
+        
             if abs(correlation) > 0.5:
                 strength = "strong" if abs(correlation) > 0.7 else "moderate"
                 direction = "positive" if correlation > 0 else "negative"
@@ -1107,9 +1109,10 @@ with tab2:
                     'line': 'Tube Line',
                     'arrival_timestamp': 'Arrival Time',
                     'initial_prediction_timestamp': 'Initial Prediction Time',
-                    'train_id': 'Train ID'
+                    'train_id': 'Train ID',
+                    'current_location': 'Train location'
                 },
-                hover_data=['initial_prediction_timestamp','arrival_timestamp','train_id'],
+                hover_data=['current_location','initial_prediction_timestamp','arrival_timestamp','train_id'],
                 category_orders={
                     'line': ['metropolitan', 'hammersmith-city', 'northern', 'piccadilly', 'victoria']
                 }
@@ -1396,7 +1399,7 @@ with tab3:
                 4: 'Thursday',
                 5: 'Friday',
                 6: 'Saturday',
-                7: 'Sunday'
+                0: 'Sunday'
             }
             # Map only the days we have data for
             day_df['day_name'] = day_df['day_of_week'].map(day_names)
@@ -1495,10 +1498,10 @@ with tab3:
             numeric_columns = ['accuracy_percentage', 'accuracy_percentage_60s', 'avg_error', 'avg_abs_error']
         for col in numeric_columns:
             day_line_df[col] = pd.to_numeric(day_line_df[col], errors='coerce')
- 
+        
         # Map day numbers to names
         day_line_df['day_name'] = day_line_df['day_of_week'].map(day_names)
-
+        
         # Create complete index and columns for all combinations
         all_lines = sorted(day_line_df['line'].unique())
         all_days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
@@ -2319,11 +2322,11 @@ with tab9:
                     last_week = last_14_days.tail(7)['accuracy_percentage'].mean()
                     previous_week = last_14_days.head(7)['accuracy_percentage'].mean()
                     trend = last_week - previous_week
-                    st.metric(
-                        "Overall Accuracy Trend",
-                        f"{trend:+.1f}%",
-                        "Change in last 7 days vs previous 7 days"
-                    )
+                st.metric(
+                    "Overall Accuracy Trend",
+                    f"{trend:+.1f}%",
+                    "Change in last 7 days vs previous 7 days"
+                )
         
         with col2:
             # Most improved line

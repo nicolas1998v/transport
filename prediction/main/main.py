@@ -274,6 +274,16 @@ def collect_predictions(request):
                             WHERE arrival_timestamp IS NOT NULL
                             AND arrival_timestamp >= TIMESTAMP('{one_min_ago_str}')
                         ),
+                          initial_locations AS (
+                            SELECT 
+                                train_id,
+                                initial_prediction_timestamp,
+                                current_location,
+                                ROW_NUMBER() OVER (PARTITION BY train_id, initial_prediction_timestamp ORDER BY timestamp ASC) as rn
+                            FROM `nico-playground-384514.transport_predictions.prediction_history`
+                            WHERE initial_prediction_timestamp IS NOT NULL
+                            AND initial_prediction_timestamp >= TIMESTAMP_SUB(TIMESTAMP('{one_min_ago_str}'), INTERVAL 95 MINUTE)
+                        ),
                         max_times AS (
                             SELECT 
                                 train_id,
@@ -292,8 +302,13 @@ def collect_predictions(request):
                             mt.max_time_to_station as time_to_station,
                             EXTRACT(HOUR FROM ip.arrival_timestamp) as hour,
                             EXTRACT(DAYOFWEEK FROM ip.arrival_timestamp) - 1 as day_of_week,
-                            ip.direction
+                            ip.direction,
+                            il.current_location
                         FROM initial_predictions ip
+                        LEFT JOIN initial_locations il 
+                        ON ip.train_id = il.train_id 
+                        AND ip.initial_prediction_timestamp = il.initial_prediction_timestamp
+                        AND il.rn = 1
                         LEFT JOIN max_times mt
                             ON ip.train_id = mt.train_id
                             AND ip.initial_prediction_timestamp = mt.initial_prediction_timestamp
