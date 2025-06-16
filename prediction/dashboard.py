@@ -1231,7 +1231,7 @@ with tab2:
         st.subheader("Correlation Analysis - Error")
         st.info ("""⚠️  A negative correlation here means that the further away the train is, predictions tend to be optimistic and underestimate the journey, and trains mostly arrive later than what they first predicted.   
         A positive correlation here means that the further away the train is, predictions tend to be pessimistic and overestimate the journey, and trains mostly arrive earlier than what they first predicted.  
-        In this case however, when looking ath the graph for Hammersmith and City, the predictions are just less late when they are furthest away, but they arent pessimistic at all.
+        In this case however, when looking at the graph for Hammersmith and City, the predictions are just less late when they are furthest away, but they arent pessimistic at all.   
         A negative average error here means that the tube line is late by x amount on average and vice versa for a positive average error.""")
 
         for line_data in line_correlations:
@@ -2365,7 +2365,7 @@ with tab10:
     st.header("Anomaly Detection")
     
     st.markdown("""
-    What is an Anomaly? Which lines have the most anomalies? Which lines has the worst anomalies?
+    What is an anomaly? Which lines have the most anomalies? Which lines has the worst anomalies?
     
     In this analysis, an anomaly is defined as an hour where the prediction accuracy is significantly lower than normal. Specifically:
     
@@ -2510,7 +2510,7 @@ with tab11:
     st.header("Line Interaction Analysis")
     
     st.markdown("""
-     What is line Interaction Analysis? 
+     What is line interaction analysis? 
      What is the best and worst line sequence?
     
     The visualization shows:
@@ -2595,7 +2595,7 @@ with tab12:
     st.header("Weather Impact Analysis")
 
     st.markdown("""
-    How do weather conditions temperature, wind speed, precipitation and cloud coverage affect accuracy and errors?
+    How do weather conditions, temperature, wind speed, precipitation and cloud coverage affect accuracy and errors?
     Data from OpenWeatherMap API, fetched every hour.
     """)
     
