@@ -392,7 +392,7 @@ with tab1:
     FROM `nico-playground-384514.transport_predictions.any_errors`
     """
 
-    accuracy_results = client.query(accuracy_query).to_dataframe()
+    accuracy_results = get_cached_query(accuracy_query)
 
     if not accuracy_results.empty:
         col1, col2 = st.columns(2)
@@ -473,8 +473,8 @@ with tab1:
     ORDER BY e.timestamp
     """
 
-    df = client.query(run_query).to_dataframe()
-    df_any_prediction = client.query(any_prediction_query).to_dataframe()
+    df = get_cached_query(run_query)
+    df_any_prediction = get_cached_query(any_prediction_query)
 
     if not df.empty:
         # Add train_id filter
@@ -736,7 +736,7 @@ with tab1:
     # Display line-specific insights
         
         st.subheader("Correlation Analysis - Absolute Error")
-        st.info ("""⚠️ A positive correlation here means that the further away you predict, the more prediction errors increase.""")
+        st.info ("""⚠️ A positive correlation here means that the further away you predict, the more prediction errors increase in magnitude.""")
         for line_data_abs in line_correlations_abs:
             correlation_abs = line_data_abs['correlation_abs']
             line = line_data_abs['line']
@@ -838,10 +838,10 @@ with tab1:
             line_correlations.sort(key=lambda x: abs(x['correlation']), reverse=True)
             line_correlations_abs.sort(key=lambda x: abs(x['correlation_abs']), reverse=True)
 
-    # Display line-specific insights
+         # Display line-specific insights
         
         st.subheader("Correlation Analysis - Absolute Error")
-        st.info ("""⚠️ A positive correlation here means that the further away you predict, the more prediction errors increase.""")
+        st.info ("""⚠️ A positive correlation here means that the further away you predict, the more prediction errors increase in magnitude.""")
         for line_data_abs in line_correlations_abs:
             correlation_abs = line_data_abs['correlation_abs']
             line = line_data_abs['line']
@@ -898,8 +898,6 @@ with tab1:
         st.plotly_chart(fig, use_container_width=True)
             
 
-
-
 with tab2:
     st.markdown("""
     This second tab introduces a new variable: the initial prediction. 
@@ -921,7 +919,7 @@ with tab2:
     FROM `nico-playground-384514.transport_predictions.initial_errors`
     """
     
-    accuracy_results = client.query(accuracy_query).to_dataframe()
+    accuracy_results = get_cached_query(accuracy_query)
     
     if not accuracy_results.empty:
         col1, col2 = st.columns(2)
@@ -953,7 +951,7 @@ with tab2:
     ORDER BY direction, line
     """
     
-    initial_direction_results = client.query(initial_direction_query).to_dataframe()
+    initial_direction_results = get_cached_query(initial_direction_query)
     
     if initial_direction_results.empty:
         st.warning("No data available for analysis")
@@ -1141,12 +1139,12 @@ with tab2:
                 }
             )
             
-            # Update layout and legend labels
+                # Update layout and legend labels
             fig_outbound.update_layout(
                 height=600,
                 showlegend=True,
                 hovermode='closest'
-            )
+                )
             
             # Update legend labels for outbound
             legend_labels = {
@@ -1233,7 +1231,8 @@ with tab2:
 
         st.subheader("Correlation Analysis - Error")
         st.info ("""⚠️  A negative correlation here means that the further away the train is, predictions tend to be optimistic and underestimate the journey, and trains mostly arrive later than what they first predicted.   
-        A positive correlation here means that the further away the train is, predictions tend to be pessimistic and overestimate the journey, and trains mostly arrive earlier than what they first predicted. In this case however, it seems that for Hammersmith and City, the predictions are just less late when they are furthest away, but they arent pessimistic at all.
+        A positive correlation here means that the further away the train is, predictions tend to be pessimistic and overestimate the journey, and trains mostly arrive earlier than what they first predicted.  
+        In this case however, it seems that for Hammersmith and City, the predictions are just less late when they are furthest away, but they arent pessimistic at all.
         A negative average error here means that the tube line is late by x amount on average and vice versa for a positive average error.""")
 
         for line_data in line_correlations:
