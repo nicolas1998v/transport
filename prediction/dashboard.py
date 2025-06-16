@@ -368,8 +368,6 @@ def rename_station(station):
     return STATION_RENAMES.get(station, station)
 
 with tab1:
-    st.header("Prediction Error Analysis")
-    
     st.markdown("""      
         Welcome to my dashboard! Let's imagine you are on the platform at King's Cross and you're wondering when your train is coming, so you check the arrival screens.  
         Now imagine you have a bigger screen which shows the same predictions, but for every tube line disserving King's Cross, and for trains as far as 20 minutes away.
@@ -383,7 +381,7 @@ with tab1:
         
         In this tab, you can isolate the data by clicking on the line you want to see, and zoom in on the scatter plot by dragging the mouse to see more details. You can also select a single train and isolate a few runs to better understand how Transport for London makes its predictions. Tube lines divided by direction, inbound to KC and outbound to KC.
         """)
-        # Add metric for predictions within 30 seconds and 1 minute
+    # Add metric for predictions within 30 seconds and 1 minute
     accuracy_query = """
     SELECT 
         CAST(COUNT(*) AS FLOAT64) as total_predictions,
@@ -411,7 +409,7 @@ with tab1:
             help=f"Based on {accuracy_results.iloc[0]['total_predictions']:.0f} predictions"
         )
 
-        # Query for any predictions by direction
+    # Query for any predictions by direction
     any_prediction_query = """
     SELECT 
         train_id,
@@ -903,8 +901,6 @@ with tab1:
 
 
 with tab2:
-    st.header("Initial Prediction Analysis by Direction")
-       
     st.markdown("""
     This second tab introduces a new variable: the initial prediction. 
     The initial prediction is the first prediction of a train when first arriving in the dataset, at least 20 minutes after that said train was last seen (as trains eventually come back into the radar).  
@@ -915,7 +911,7 @@ with tab2:
     """)
     
     # Add metrics for predictions within 30 seconds and 1 minute
-accuracy_query = """
+    accuracy_query = """
     SELECT 
         CAST(COUNT(*) AS FLOAT64) as total_predictions,
         CAST(COUNTIF(ABS(error_seconds) <= 30) AS FLOAT64) as accurate_predictions_30s,
@@ -925,9 +921,9 @@ accuracy_query = """
     FROM `nico-playground-384514.transport_predictions.initial_errors`
     """
     
-accuracy_results = client.query(accuracy_query).to_dataframe()
+    accuracy_results = client.query(accuracy_query).to_dataframe()
     
-if not accuracy_results.empty:
+    if not accuracy_results.empty:
         col1, col2 = st.columns(2)
         with col1:   
             st.metric(
@@ -941,11 +937,9 @@ if not accuracy_results.empty:
                 f"{accuracy_results.iloc[0]['accuracy_percentage_60s']:.1f}%",
             help=f"Based on {accuracy_results.iloc[0]['total_predictions']:.0f} predictions"
         )
-    
-st.header("Initial Prediction Analysis by Direction")
-    
+        
     # Query for initial predictions by direction
-initial_direction_query = """
+    initial_direction_query = """
     SELECT 
         train_id,
         direction,
@@ -959,11 +953,11 @@ initial_direction_query = """
     ORDER BY direction, line
     """
     
-initial_direction_results = client.query(initial_direction_query).to_dataframe()
+    initial_direction_results = client.query(initial_direction_query).to_dataframe()
     
-if initial_direction_results.empty:
+    if initial_direction_results.empty:
         st.warning("No data available for analysis")
-else:
+    else:
         # Inbound predictions
         st.subheader("Inbound Predictions")
         inbound_data = initial_direction_results[initial_direction_results['direction'] == 'inbound'].copy()
