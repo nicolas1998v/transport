@@ -1050,7 +1050,7 @@ with tab2:
         # Display line-specific insights
         
         st.subheader("Correlation Analysis - Absolute Error")
-        st.info ("""⚠️ A positive correlation here means that the further away you predict, the more prediction errors increase.""")
+        st.info ("""⚠️ A positive correlation here means that the further away you predict, the more prediction errors increase in magnitude.""")
         for line_data_abs in line_correlations_abs:
             correlation_abs = line_data_abs['correlation_abs']
             line = line_data_abs['line']
@@ -1082,7 +1082,7 @@ with tab2:
 
         st.subheader("Correlation Analysis - Error")
         st.info ("""⚠️  A negative correlation here means that the further away the train is, predictions tend to be optimistic and underestimate the journey, and trains mostly arrive later than what they first predicted.   
-        A positive correlation here means that the further away the train is, predictions tend to be pessimistic and overestimate the journey, and trains mostly arrive earlier than what they first predicted.  
+        A positive correlation here means that the further away the train is, predictions tend to be pessimistic and overestimate the journey, and trains mostly arrive earlier than what they first predicted.     
         A negative average error here means that the tube line is late by x amount on average and vice versa for a positive average error.""")
 
         for line_data in line_correlations:
@@ -1202,7 +1202,6 @@ with tab2:
     # Display line-specific insights
         
         st.subheader("Correlation Analysis - Absolute Error")
-        st.info ("""⚠️ A positive correlation here means that the further away you predict, the more prediction errors increase.""")
         for line_data_abs in line_correlations_abs:
             correlation_abs = line_data_abs['correlation_abs']
             line = line_data_abs['line']
@@ -1232,7 +1231,7 @@ with tab2:
         st.subheader("Correlation Analysis - Error")
         st.info ("""⚠️  A negative correlation here means that the further away the train is, predictions tend to be optimistic and underestimate the journey, and trains mostly arrive later than what they first predicted.   
         A positive correlation here means that the further away the train is, predictions tend to be pessimistic and overestimate the journey, and trains mostly arrive earlier than what they first predicted.  
-        In this case however, it seems that for Hammersmith and City, the predictions are just less late when they are furthest away, but they arent pessimistic at all.
+        In this case however, when looking ath the graph for Hammersmith and City, the predictions are just less late when they are furthest away, but they arent pessimistic at all.
         A negative average error here means that the tube line is late by x amount on average and vice versa for a positive average error.""")
 
         for line_data in line_correlations:
