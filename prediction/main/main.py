@@ -241,7 +241,6 @@ def collect_predictions(request):
         # Collect predictions
         rows_to_insert = fetch_predictions(current_time, client)
         
-
         
         if rows_to_insert:
             try:
@@ -255,154 +254,101 @@ def collect_predictions(request):
                 else:
                     print(f"Successfully inserted {len(rows_to_insert)} rows")
                     
-                    # Process initial errors after successful insert
-                if any(row.get('arrival_timestamp') for row in rows_to_insert):
-                    one_min_ago = current_time - timedelta(minutes=1)
-                    one_min_ago_str = one_min_ago.isoformat()
+                for row in rows_to_insert:
+                    if row.get('arrival_timestamp'):
+                        train_id = row['train_id']
+                        print(f"\nProcessing train: {train_id}")
+                        print(f"Row data: {row}")  # See what data we have
+                        
+                        try:
+                            print(f"Running initial_errors query for train: {train_id}")
+                            one_min_ago = current_time - timedelta(minutes=1)
+                            one_min_ago_str = one_min_ago.isoformat()
+                            line = row['line']
+                            initial_prediction_timestamp = row['initial_prediction_timestamp']
+                            arrival_timestamp = row['arrival_timestamp']
+                            direction = row['direction']
+                            initial_errors_query = f"""
+                                INSERT INTO `nico-playground-384514.transport_predictions.initial_errors`
+                                WITH initial_locations AS (
+                                    SELECT 
+                                        train_id,
+                                        initial_prediction_timestamp,
+                                        current_location,
+                                    FROM `nico-playground-384514.transport_predictions.prediction_history`
+                                    WHERE initial_prediction_timestamp IS NOT NULL
+                                    AND initial_prediction_timestamp >= TIMESTAMP_SUB(TIMESTAMP('{one_min_ago_str}'), INTERVAL 95 MINUTE)
+                                    AND train_id = '{train_id}'
+                                    order by initial_prediction_timestamp desc
+                                    limit 1
+                                ),
+                                max_times AS (
+                                    SELECT 
+                                        train_id,
+                                        initial_prediction_timestamp,
+                                        MAX(time_to_station) as max_time_to_station
+                                    FROM `nico-playground-384514.transport_predictions.prediction_history`
+                                    WHERE initial_prediction_timestamp >= TIMESTAMP_SUB(TIMESTAMP('{one_min_ago_str}'), INTERVAL 95 MINUTE)
+                                    AND train_id = '{train_id}'
+                                    GROUP BY train_id, initial_prediction_timestamp
+                                )
+                                SELECT DISTINCT
+                                    '{train_id}' as train_id,
+                                    '{line}' as line,
+                                    TIMESTAMP('{initial_prediction_timestamp}') as initial_prediction_timestamp,
+                                    TIMESTAMP('{arrival_timestamp}') as arrival_timestamp,
+                                    TIMESTAMP_DIFF(TIMESTAMP('{initial_prediction_timestamp}'), TIMESTAMP('{arrival_timestamp}'), SECOND) as error_seconds,
+                                    mt.max_time_to_station as time_to_station,
+                                    EXTRACT(HOUR FROM TIMESTAMP('{arrival_timestamp}')) as hour,
+                                    EXTRACT(DAYOFWEEK FROM TIMESTAMP('{arrival_timestamp}')) - 1 as day_of_week,
+                                    '{direction}' as direction,
+                                    il.current_location
+                                FROM initial_locations il
+                                LEFT JOIN max_times mt
+                                    ON il.train_id = mt.train_id
+                                    AND il.initial_prediction_timestamp = mt.initial_prediction_timestamp
+                                """
+                            print(f"Query: {initial_errors_query}")  # Print the actual query
+                            client.query(initial_errors_query)
+                            print(f"Successfully ran initial_errors query for train: {train_id}")
+                        except Exception as e:
+                            print(f"Error running initial_errors query for train {train_id}: {str(e)}")
 
-                    initial_errors_query = f"""
-                        INSERT INTO `nico-playground-384514.transport_predictions.initial_errors`
-                        WITH initial_predictions AS (
+                        # Process any_errors for this train
+                        print(f"Getting any predictions for train: {train_id}")  # Debug log
+
+                        any_errors_query = f"""
+                            INSERT INTO `nico-playground-384514.transport_predictions.any_errors`
                             SELECT 
                                 train_id,
                                 line,
-                                initial_prediction_timestamp,
-                                arrival_timestamp,
-                                direction,
-                                ROW_NUMBER() OVER (PARTITION BY train_id, initial_prediction_timestamp ORDER BY arrival_timestamp DESC) as rn
-                            FROM `nico-playground-384514.transport_predictions.prediction_history`
-                            WHERE arrival_timestamp IS NOT NULL
-                            AND arrival_timestamp >= TIMESTAMP('{one_min_ago_str}')
-                        ),
-                          initial_locations AS (
-                            SELECT 
-                                train_id,
-                                initial_prediction_timestamp,
+                                timestamp,
+                                any_prediction_timestamp,
+                                TIMESTAMP('{arrival_timestamp}') as arrival_timestamp,
+                                TIMESTAMP_DIFF(any_prediction_timestamp, TIMESTAMP('{arrival_timestamp}'), SECOND) as error_seconds,
+                                time_to_station,
+                                EXTRACT(HOUR FROM TIMESTAMP('{arrival_timestamp}')) as hour,
+                                EXTRACT(DAYOFWEEK FROM TIMESTAMP('{arrival_timestamp}')) -1 as day_of_week,
                                 current_location,
-                                ROW_NUMBER() OVER (PARTITION BY train_id, initial_prediction_timestamp ORDER BY timestamp ASC) as rn
+                                direction
                             FROM `nico-playground-384514.transport_predictions.prediction_history`
-                            WHERE initial_prediction_timestamp IS NOT NULL
-                            AND initial_prediction_timestamp >= TIMESTAMP_SUB(TIMESTAMP('{one_min_ago_str}'), INTERVAL 95 MINUTE)
-                        ),
-                        max_times AS (
-                            SELECT 
-                                train_id,
-                                initial_prediction_timestamp,
-                                MAX(time_to_station) as max_time_to_station
-                            FROM `nico-playground-384514.transport_predictions.prediction_history`
-                            WHERE initial_prediction_timestamp >= TIMESTAMP_SUB(TIMESTAMP('{one_min_ago_str}'), INTERVAL 95 MINUTE)
-                            GROUP BY train_id, initial_prediction_timestamp
-                        )
-                        SELECT DISTINCT
-                            ip.train_id,
-                            ip.line,
-                            ip.initial_prediction_timestamp,
-                            ip.arrival_timestamp,
-                            TIMESTAMP_DIFF(ip.initial_prediction_timestamp, ip.arrival_timestamp, SECOND) as error_seconds,
-                            mt.max_time_to_station as time_to_station,
-                            EXTRACT(HOUR FROM ip.arrival_timestamp) as hour,
-                            EXTRACT(DAYOFWEEK FROM ip.arrival_timestamp) - 1 as day_of_week,
-                            ip.direction,
-                            il.current_location
-                        FROM initial_predictions ip
-                        LEFT JOIN initial_locations il 
-                        ON ip.train_id = il.train_id 
-                        AND ip.initial_prediction_timestamp = il.initial_prediction_timestamp
-                        AND il.rn = 1
-                        LEFT JOIN max_times mt
-                            ON ip.train_id = mt.train_id
-                            AND ip.initial_prediction_timestamp = mt.initial_prediction_timestamp
-                        WHERE ip.rn = 1
-                        """
-                    client.query(initial_errors_query)
-                    print("Processed initial errors")
-
-                    # Process any_errors for each row with arrival_timestamp
-                    any_errors_rows = []
-                    for row in rows_to_insert:
-                        if row.get('arrival_timestamp'):
-                            try:
-                                # Define arrival_ts first since we use it in both initial and any errors
-                                arrival_ts = datetime.fromisoformat(row['arrival_timestamp'])
-                                hour = arrival_ts.hour - 1
-                                day_of_week = arrival_ts.weekday() + 1
-
-                                print(f"Processing any errors for train: {row['train_id']}, arrival: {arrival_ts}")  # Debug log
-                                        
-                                # Then handle any_errors table
-                                print(f"Getting any predictions for train: {row['train_id']}")  # Debug log
-                                        
-                                # Get predictions between initial prediction and arrival
-                                predictions_query = f"""
-                                        SELECT 
-                                            train_id,
-                                            line,
-                                            timestamp,
-                                            time_to_station,
-                                            any_prediction_timestamp,
-                                            arrival_timestamp,
-                                            current_location,
-                                            direction
-                                        FROM `nico-playground-384514.transport_predictions.prediction_history`
-                                        WHERE train_id = '{row['train_id']}'
-                                        AND timestamp >= (
-                                            SELECT timestamp 
-                                            FROM `nico-playground-384514.transport_predictions.prediction_history`
-                                            WHERE train_id = '{row['train_id']}'
-                                            AND any_prediction_timestamp IS NULL
-                                            AND arrival_timestamp IS NULL
-                                            AND timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 95 MINUTE) 
-                                            ORDER BY TIMESTAMP DESC
-                                            LIMIT 1
-                                        )
-                                        AND any_prediction_timestamp IS NOT NULL
-                                        ORDER BY timestamp ASC
-                                        """
-                                        
-                                results = list(client.query(predictions_query))
-                                print(f"Found {len(results)} any predictions for {row['train_id']}")
-                                        
-                                # Process ALL predictions, not just middle ones
-                                for pred in results:
-                                    if pred.any_prediction_timestamp:
-                                        # Calculate error in seconds for this prediction
-                                        prediction_ts = pred.any_prediction_timestamp
-                                        error_seconds = int((prediction_ts - arrival_ts).total_seconds())
-                                            
-                                        print(f"Adding any error - Train: {pred.train_id}, Time: {pred.time_to_station}, Error: {error_seconds}")
-                                            
-                                        # Add to batch
-                                        any_errors_rows.append({
-                                            'train_id': pred.train_id,
-                                            'line': pred.line,
-                                            'timestamp': pred.timestamp.isoformat(),
-                                            'any_prediction_timestamp': pred.any_prediction_timestamp.isoformat(),
-                                            'arrival_timestamp': arrival_ts.isoformat(),
-                                            'error_seconds': error_seconds,
-                                            'hour': hour,
-                                            'day_of_week': day_of_week,
-                                            'time_to_station': pred.time_to_station,
-                                            'current_location': pred.current_location,
-                                            'direction': pred.direction
-                                        })
-
-                            except Exception as e:
-                                print(f"Error processing any error for train {row['train_id']}: {e}")  # Debug log
-                                continue
-
-                    # Do batch insert if we have any rows
-                    if any_errors_rows:
-                        try:
-                            errors = client.insert_rows_json(
-                                "nico-playground-384514.transport_predictions.any_errors",
-                                any_errors_rows
+                            WHERE train_id = '{train_id}'
+                            AND timestamp >= (
+                                SELECT timestamp 
+                                FROM `nico-playground-384514.transport_predictions.prediction_history`
+                                WHERE train_id = '{train_id}'
+                                AND any_prediction_timestamp IS NULL
+                                AND arrival_timestamp IS NULL
+                                AND timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 95 MINUTE) 
+                                ORDER BY TIMESTAMP DESC
+                                LIMIT 1
                             )
-                            if errors:
-                                print(f"Encountered errors while inserting any_errors rows: {errors}")
-                            else:
-                                print(f"Successfully inserted {len(any_errors_rows)} any_errors rows")
-                        except Exception as e:
-                            print(f"Error during any_errors batch insert: {str(e)}")
+                            AND any_prediction_timestamp IS NOT NULL
+                            ORDER BY timestamp ASC
+                        """
+
+                        client.query(any_errors_query)
+                        print(f"Processed any errors for train: {train_id}")
 
             except Exception as e:
                 print(f"Error during batch insert: {str(e)}")
