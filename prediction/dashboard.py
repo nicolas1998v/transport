@@ -2030,367 +2030,6 @@ with tab5:
                 
                 st.plotly_chart(fig, use_container_width=True)
 
-with tab10:
-    st.header("Direction Analysis")
-    
-    st.markdown(""" How does accuracy vary by direction per line?
-    """)
-    
-    # Query to get direction-based statistics
-    direction_query = """
-    SELECT 
-        line,
-        direction,
-        COUNT(*) as total_predictions,
-        ROUND(COUNTIF(ABS(error_seconds) <= 30) / COUNT(*) * 100, 1) as accuracy_30s,
-        ROUND(AVG(error_seconds), 1) as avg_error,
-        ROUND(AVG(ABS(error_seconds)), 1) as avg_abs_error
-    FROM `nico-playground-384514.transport_predictions.any_errors`
-    WHERE direction in ('outbound', 'inbound')
-    GROUP BY line, direction
-    ORDER BY line, direction
-    """
-    
-    direction_df = get_cached_query(direction_query)
-    
-    if not direction_df.empty:
-        # Create a line selector
-        selected_line = st.selectbox(
-            "Select Line",
-            options=sorted(direction_df['line'].unique()),
-            key="direction_line"
-        )
-        
-        # Filter data for selected line
-        line_data = direction_df[direction_df['line'] == selected_line]
-        
-        # Define direction labels based on line
-        if selected_line in ['hammersmith-city', 'metropolitan']:
-            line_data['direction'] = line_data['direction'].map({
-                'outbound': 'West to KC',
-                'inbound': 'East to KC'
-            })
-        elif selected_line in ['victoria', 'northern']:
-            line_data['direction'] = line_data['direction'].map({
-                'outbound': 'South to KC',
-                'inbound': 'North to KC'
-            })
-        elif selected_line == 'piccadilly':
-            line_data['direction'] = line_data['direction'].map({
-                'outbound': 'South West to KC',
-                'inbound': 'North East to KC'
-            })
-        
-        # Create bar plot
-        fig = px.bar(
-            line_data,
-            x='direction',
-            y='accuracy_30s',
-            title=f"Prediction Accuracy by Direction - {selected_line.title()}",
-            labels={
-                'direction': 'Direction',
-                'accuracy_30s': 'Accuracy % (±30s)',
-                'avg_error': 'Average Error (seconds)',
-                'avg_abs_error': 'Average Absolute Error (seconds)'
-            },
-            hover_data=['avg_error','avg_abs_error']
-        )
-        
-        # Update layout
-        fig.update_layout(
-            height=600,
-            showlegend=False,
-            bargap=0.3,
-            yaxis=dict(
-                range=[0, 100],
-                title='Accuracy %'
-            )
-        )
-        
-        # Add value labels on top of bars
-        fig.update_traces(
-            texttemplate='%{y:.1f}%',
-            textposition='outside'
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # Show total predictions for each direction
-        st.subheader("Total Predictions by Direction")
-        for _, row in line_data.iterrows():
-            st.write(f"{row['direction']}: {row['total_predictions']:,.0f} predictions")
-
-with tab9:
-    st.header("Peak vs Off-Peak Analysis")
-
-    st.markdown(""" How do peak times and off peak times compare in terms of accuracy and error?
-    """)
-    
-    # Query to get peak time analysis
-    peak_query = """
-    WITH time_periods AS (
-        SELECT 
-            line,
-            CASE 
-                WHEN (EXTRACT(HOUR FROM arrival_timestamp) = 7 AND EXTRACT(MINUTE FROM arrival_timestamp) >= 0)
-                    OR (EXTRACT(HOUR FROM arrival_timestamp) = 8)
-                    OR (EXTRACT(HOUR FROM arrival_timestamp) = 9 AND EXTRACT(MINUTE FROM arrival_timestamp) < 30)
-                THEN 'Morning Peak (7:00-9:30)'
-                WHEN (EXTRACT(HOUR FROM arrival_timestamp) = 16 AND EXTRACT(MINUTE FROM arrival_timestamp) >= 30)
-                    OR (EXTRACT(HOUR FROM arrival_timestamp) = 17)
-                    OR (EXTRACT(HOUR FROM arrival_timestamp) = 18)
-                    OR (EXTRACT(HOUR FROM arrival_timestamp) = 19 AND EXTRACT(MINUTE FROM arrival_timestamp) = 0)
-                THEN 'Evening Peak (16:30-19:00)'
-                ELSE 'Off-Peak'
-            END as time_period,
-            COUNT(*) as total_predictions,
-            ROUND(COUNTIF(ABS(error_seconds) <= 30) / COUNT(*) * 100, 1) as accuracy_percentage,
-            ROUND(AVG(error_seconds), 1) as avg_error,
-            ROUND(AVG(ABS(error_seconds)), 1) as avg_abs_error
-        FROM `nico-playground-384514.transport_predictions.any_errors`
-        GROUP BY line, time_period
-    )
-    SELECT *
-    FROM time_periods
-    ORDER BY 
-        CASE time_period
-            WHEN 'Morning Peak (7:00-9:30)' THEN 1
-            WHEN 'Evening Peak (16:30-19:00)' THEN 2
-            ELSE 3
-        END,
-        line
-    """
-    
-    peak_df = get_cached_query(peak_query)
-    
-    if not peak_df.empty:
-        # Create a grouped bar chart showing accuracy by time period and line
-        fig = px.bar(
-            peak_df,
-            x='line',
-            y='accuracy_percentage',
-            color='time_period',
-            barmode='group',
-            title="Prediction Accuracy by Time Period and Line",
-            labels={
-                'line': 'Tube Line',
-                'accuracy_percentage': 'Accuracy % (±30s)',
-                'time_period': 'Time Period',
-                'avg_error': 'Average Error (seconds)',
-                'avg_abs_error': 'Average Absolute Error (seconds)'
-            },
-            hover_data=['avg_error','avg_abs_error']
-        )
-        
-        # Update layout
-        fig.update_layout(
-            height=600,
-            showlegend=True,
-            hovermode='closest'
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # Add summary statistics
-        st.subheader("Summary Statistics by Time Period")
-        
-        # Calculate overall statistics for each time period
-        period_stats = peak_df.groupby('time_period').agg({
-            'total_predictions': 'sum',
-            'accuracy_percentage': 'mean',
-            'avg_error': lambda x: (x * peak_df.loc[x.index, 'total_predictions']).sum() / peak_df.loc[x.index, 'total_predictions'].sum()
-        }).reset_index()
-        
-        # Display metrics in three columns
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            morning_peak = period_stats[period_stats['time_period'] == 'Morning Peak (7:00-9:30)']
-            if not morning_peak.empty:
-                st.metric(
-                    "Morning Peak (7:00-9:30)",
-                    f"{morning_peak['accuracy_percentage'].iloc[0]:.1f}%",
-                    f"Avg Error: {morning_peak['avg_error'].iloc[0]:.1f}s"
-                )
-            else:
-                st.metric("Morning Peak (7:00-9:30)", "No data")
-        
-        with col2:
-            evening_peak = period_stats[period_stats['time_period'] == 'Evening Peak (16:30-19:00)']
-            if not evening_peak.empty:
-                st.metric(
-                    "Evening Peak (16:30-19:00)",
-                    f"{evening_peak['accuracy_percentage'].iloc[0]:.1f}%",
-                    f"Avg Error: {evening_peak['avg_error'].iloc[0]:.1f}s"
-                )
-            else:
-                st.metric("Evening Peak (16:30-19:00)", "No data")
-        
-        with col3:
-            off_peak = period_stats[period_stats['time_period'] == 'Off-Peak']
-            if not off_peak.empty:
-                st.metric(
-                    "Off-Peak",
-                    f"{off_peak['accuracy_percentage'].iloc[0]:.1f}%",
-                    f"Avg Error: {off_peak['avg_error'].iloc[0]:.1f}s"
-                )
-            else:
-                st.metric("Off-Peak", "No data")
-        
-with tab12:
-    st.header("Error Pattern Analysis")
-
-    st.markdown(""" Which lines have the most observations? Which lines have the most early arrivals? Which lines have the most late arrivals?
-    """)
-    
-    # Query to analyze error patterns
-    error_pattern_query = """
-    WITH error_analysis AS (
-        SELECT 
-            line,
-            CASE 
-                WHEN error_seconds > 30 THEN 'Early Arrival'
-                WHEN error_seconds < -30 THEN 'Late Arrival'
-                ELSE 'Accurate'
-            END as error_type,
-            COUNT(*) as count,
-            ROUND(AVG(error_seconds), 1) as avg_error,
-            ROUND(AVG(ABS(error_seconds)), 1) as avg_abs_error,
-            ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (PARTITION BY line), 1) as percentage
-        FROM `nico-playground-384514.transport_predictions.any_errors`
-        GROUP BY line, error_type
-    )
-    SELECT *
-    FROM error_analysis
-    ORDER BY line, error_type
-    """
-    
-    error_df = get_cached_query(error_pattern_query)
-    
-    if not error_df.empty:
-        # Create stacked bar chart for error types by line
-        fig = px.bar(
-            error_df,
-            x='line',
-            y='count',
-            color='error_type',
-            title="Prediction Error Types by Line",
-            labels={
-                'line': 'Tube Line',
-                'count': 'Number of Predictions',
-                'error_type': 'Error Type',
-                'avg_error': 'Average Error (seconds)',
-                'avg_abs_error': 'Average Absolute Error (seconds)'
-            },
-            hover_data=['avg_error','avg_abs_error']
-        )
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # Add summary statistics
-        st.subheader("Error Pattern Summary")
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # Most overestimated line
-            overestimate = error_df[error_df['error_type'] == 'Early Arrival'].sort_values('percentage', ascending=False)
-            if not overestimate.empty:
-                st.metric(
-                    "Earliest Line",
-                    f"{overestimate.iloc[0]['line']} ({overestimate.iloc[0]['percentage']:.1f}%)",
-                    f"Avg Error: {overestimate.iloc[0]['avg_error']:.1f}s"
-                )
-        
-        with col2:
-            # Most underestimated line
-            underestimate = error_df[error_df['error_type'] == 'Late Arrival'].sort_values('percentage', ascending=False)
-            if not underestimate.empty:
-                st.metric(
-                    "Latest Line",
-                    f"{underestimate.iloc[0]['line']} ({underestimate.iloc[0]['percentage']:.1f}%)",
-                    f"Avg Error: {underestimate.iloc[0]['avg_error']:.1f}s"
-                )
-
-with tab11:
-    st.header("Prediction Drift Analysis")
-    
-    st.markdown(""" How did the accuracy vary throughout the last 14 days?
-    """)
-    
-    # Query to analyze prediction drift over time
-    drift_query = """
-    WITH daily_stats AS (
-        SELECT 
-            DATE(arrival_timestamp) as date,
-            line,
-            COUNT(*) as total_predictions,
-            ROUND(COUNTIF(ABS(error_seconds) <= 30) / COUNT(*) * 100, 1) as accuracy_percentage,
-            ROUND(AVG(error_seconds), 1) as avg_error,
-            ROUND(AVG(ABS(error_seconds)), 1) as avg_abs_error
-        FROM `nico-playground-384514.transport_predictions.any_errors`
-        WHERE DATE(arrival_timestamp) >= DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY)
-        GROUP BY date, line
-    )
-    SELECT *
-    FROM daily_stats
-    ORDER BY date, line
-    """
-    
-    drift_df = get_cached_query(drift_query)
-    
-    if not drift_df.empty:
-        # Create line chart for accuracy over time
-        fig = px.line(
-            drift_df,
-            x='date',
-            y='accuracy_percentage',
-            color='line',
-            title="Prediction Accuracy Over Time (Last few days)",
-            labels={
-                'date': 'Date',
-                'accuracy_percentage': 'Accuracy % (±30s)',
-                'line': 'Tube Line',
-                'avg_error': 'Average Error (seconds)',
-                'avg_abs_error': 'Average Absolute Error (seconds)'
-            }
-        )
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # Add trend analysis
-        st.subheader("Trend Analysis")
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # Calculate overall trend
-            overall_trend = drift_df.groupby('date')['accuracy_percentage'].mean().reset_index()
-            if len(overall_trend) > 1:
-                # Sort by date to ensure correct order
-                overall_trend = overall_trend.sort_values('date')
-                # Get the last 14 days
-                last_14_days = overall_trend.tail(14)
-                if len(last_14_days) >= 14:
-                    # Split into two weeks
-                    last_week = last_14_days.tail(7)['accuracy_percentage'].mean()
-                    previous_week = last_14_days.head(7)['accuracy_percentage'].mean()
-                    trend = last_week - previous_week
-                st.metric(
-                    "Overall Accuracy Trend",
-                    f"{trend:+.1f}%",
-                    "Change in last 7 days vs previous 7 days"
-                )
-        
-        with col2:
-            # Most improved line
-            line_trends = drift_df.groupby('line').apply(
-                lambda x: x.sort_values('date').tail(14).tail(7)['accuracy_percentage'].mean() - 
-                         x.sort_values('date').tail(14).head(7)['accuracy_percentage'].mean()
-            ).sort_values(ascending=False)
-            if not line_trends.empty:
-                st.metric(
-                    "Most Improved Line",
-                    f"{line_trends.index[0]} ({line_trends.iloc[0]:+.1f}%)",
-                    "Change in last 7 days vs previous 7 days"
-                )
-
 with tab6:
     st.header("Anomaly Detection")
     
@@ -2536,92 +2175,7 @@ with tab6:
             use_container_width=True
         )
 
-with tab13:
-    st.header("Line Interaction Analysis")
-    
-    st.markdown("""
-     What is line interaction analysis? 
-     What is the best and worst line sequence?
-    
-    The visualization shows:
-    - A heatmap where each cell represents a combination of two lines
-    - Those that have just arrived are on the y axis, and those that arrived previous to these on the x axis.
-    - The color intensity shows the average prediction accuracy for that line combination (for some reason, it says sum of accuracy, but it's actually the average)
-    - Darker colors indicate higher accuracy
-    """)
-    
-    # Query to analyze line interactions
-    interaction_query = """
-    WITH time_windows AS (
-        SELECT 
-            arrival_timestamp,
-            line,
-            error_seconds,
-            LAG(line) OVER (ORDER BY arrival_timestamp) as prev_line,
-            LAG(error_seconds) OVER (ORDER BY arrival_timestamp) as prev_error
-        FROM `nico-playground-384514.transport_predictions.any_errors`
-    ),
-    interactions AS (
-        SELECT 
-            line,
-            prev_line,
-            COUNT(*) as interaction_count,
-            ROUND(AVG(error_seconds), 1) as avg_error,
-            ROUND(AVG(ABS(error_seconds)), 1) as avg_abs_error,
-            ROUND(COUNTIF(ABS(error_seconds) <= 30) / COUNT(*) * 100, 1) as accuracy_percentage
-        FROM time_windows
-        WHERE prev_line IS NOT NULL
-        GROUP BY line, prev_line
-    )
-    SELECT *
-    FROM interactions
-    ORDER BY interaction_count DESC
-    """
-    
-    interaction_df = get_cached_query(interaction_query)
-    
-    if not interaction_df.empty:
-        # Create heatmap for line interactions
-        fig = px.density_heatmap(
-            interaction_df,
-            x='prev_line',
-            y='line',
-            z='accuracy_percentage',
-            title="Prediction Accuracy by Line Sequence",
-            labels={
-                'prev_line': 'Previous Line',
-                'line': 'Current Line',
-                'accuracy_percentage': 'Accuracy % (±30s)',
-                'avg_error': 'Average Error (seconds)',
-                'avg_abs_error': 'Average Absolute Error (seconds)'
-            },
-            hover_data=['avg_error','avg_abs_error']
-        )
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # Add interaction summary
-        st.subheader("Line Interaction Summary")
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # Best line sequence
-            best_sequence = interaction_df.loc[interaction_df['accuracy_percentage'].idxmax()]
-            st.metric(
-                "Best Line Sequence",
-                f"{best_sequence['prev_line']} → {best_sequence['line']}",
-                f"{best_sequence['accuracy_percentage']:.1f}% accuracy"
-            )
-        
-        with col2:
-            # Worst line sequence
-            worst_sequence = interaction_df.loc[interaction_df['accuracy_percentage'].idxmin()]
-            st.metric(
-                "Worst Line Sequence",
-                f"{worst_sequence['prev_line']} → {worst_sequence['line']}",
-                f"{worst_sequence['accuracy_percentage']:.1f}% accuracy"
-            )
-
-with tab14:
+with tab7:
     st.header("Weather Impact Analysis")
 
     st.markdown("""
@@ -3101,3 +2655,452 @@ with tab8:
             
             # Show general accuracy trends over time
             st.subheader("Prediction Accuracy Trends")
+
+with tab9:
+    st.header("Peak vs Off-Peak Analysis")
+
+    st.markdown(""" How do peak times and off peak times compare in terms of accuracy and error?
+    """)
+
+    # Query to get peak time analysis
+    peak_query = """
+    WITH time_periods AS (
+    SELECT 
+        line,
+        CASE 
+            WHEN (EXTRACT(HOUR FROM arrival_timestamp) = 7 AND EXTRACT(MINUTE FROM arrival_timestamp) >= 0)
+                OR (EXTRACT(HOUR FROM arrival_timestamp) = 8)
+                OR (EXTRACT(HOUR FROM arrival_timestamp) = 9 AND EXTRACT(MINUTE FROM arrival_timestamp) < 30)
+            THEN 'Morning Peak (7:00-9:30)'
+            WHEN (EXTRACT(HOUR FROM arrival_timestamp) = 16 AND EXTRACT(MINUTE FROM arrival_timestamp) >= 30)
+                OR (EXTRACT(HOUR FROM arrival_timestamp) = 17)
+                OR (EXTRACT(HOUR FROM arrival_timestamp) = 18)
+                OR (EXTRACT(HOUR FROM arrival_timestamp) = 19 AND EXTRACT(MINUTE FROM arrival_timestamp) = 0)
+            THEN 'Evening Peak (16:30-19:00)'
+            ELSE 'Off-Peak'
+        END as time_period,
+        COUNT(*) as total_predictions,
+        ROUND(COUNTIF(ABS(error_seconds) <= 30) / COUNT(*) * 100, 1) as accuracy_percentage,
+        ROUND(AVG(error_seconds), 1) as avg_error,
+        ROUND(AVG(ABS(error_seconds)), 1) as avg_abs_error
+    FROM `nico-playground-384514.transport_predictions.any_errors`
+    GROUP BY line, time_period
+    )
+    SELECT *
+    FROM time_periods
+    ORDER BY 
+    CASE time_period
+        WHEN 'Morning Peak (7:00-9:30)' THEN 1
+        WHEN 'Evening Peak (16:30-19:00)' THEN 2
+        ELSE 3
+    END,
+    line
+    """
+
+    peak_df = get_cached_query(peak_query)
+
+    if not peak_df.empty:
+    # Create a grouped bar chart showing accuracy by time period and line
+        fig = px.bar(
+        peak_df,
+        x='line',
+        y='accuracy_percentage',
+        color='time_period',
+        barmode='group',
+        title="Prediction Accuracy by Time Period and Line",
+        labels={
+            'line': 'Tube Line',
+            'accuracy_percentage': 'Accuracy % (±30s)',
+            'time_period': 'Time Period',
+            'avg_error': 'Average Error (seconds)',
+            'avg_abs_error': 'Average Absolute Error (seconds)'
+        },
+        hover_data=['avg_error','avg_abs_error']
+        )
+
+        # Update layout
+        fig.update_layout(
+        height=600,
+        showlegend=True,
+        hovermode='closest'
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+
+    # Add summary statistics
+    st.subheader("Summary Statistics by Time Period")
+
+    # Calculate overall statistics for each time period
+    period_stats = peak_df.groupby('time_period').agg({
+        'total_predictions': 'sum',
+        'accuracy_percentage': 'mean',
+        'avg_error': lambda x: (x * peak_df.loc[x.index, 'total_predictions']).sum() / peak_df.loc[x.index, 'total_predictions'].sum()
+    }).reset_index()
+
+    # Display metrics in three columns
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        morning_peak = period_stats[period_stats['time_period'] == 'Morning Peak (7:00-9:30)']
+        if not morning_peak.empty:
+            st.metric(
+                "Morning Peak (7:00-9:30)",
+                f"{morning_peak['accuracy_percentage'].iloc[0]:.1f}%",
+                f"Avg Error: {morning_peak['avg_error'].iloc[0]:.1f}s"
+            )
+        else:
+            st.metric("Morning Peak (7:00-9:30)", "No data")
+
+    with col2:
+        evening_peak = period_stats[period_stats['time_period'] == 'Evening Peak (16:30-19:00)']
+        if not evening_peak.empty:
+            st.metric(
+                "Evening Peak (16:30-19:00)",
+                f"{evening_peak['accuracy_percentage'].iloc[0]:.1f}%",
+                f"Avg Error: {evening_peak['avg_error'].iloc[0]:.1f}s"
+            )
+        else:
+            st.metric("Evening Peak (16:30-19:00)", "No data")
+
+    with col3:
+        off_peak = period_stats[period_stats['time_period'] == 'Off-Peak']
+        if not off_peak.empty:
+            st.metric(
+                "Off-Peak",
+                f"{off_peak['accuracy_percentage'].iloc[0]:.1f}%",
+                f"Avg Error: {off_peak['avg_error'].iloc[0]:.1f}s"
+            )
+        else:
+            st.metric("Off-Peak", "No data")
+
+
+with tab10:
+    st.header("Direction Analysis")
+
+    st.markdown(""" How does accuracy vary by direction per line?
+    """)
+
+    # Query to get direction-based statistics
+    direction_query = """
+    SELECT 
+    line,
+    direction,
+    COUNT(*) as total_predictions,
+    ROUND(COUNTIF(ABS(error_seconds) <= 30) / COUNT(*) * 100, 1) as accuracy_30s,
+    ROUND(AVG(error_seconds), 1) as avg_error,
+    ROUND(AVG(ABS(error_seconds)), 1) as avg_abs_error
+    FROM `nico-playground-384514.transport_predictions.any_errors`
+    WHERE direction in ('outbound', 'inbound')
+    GROUP BY line, direction
+    ORDER BY line, direction
+    """
+
+    direction_df = get_cached_query(direction_query)
+
+    if not direction_df.empty:
+    # Create a line selector
+        selected_line = st.selectbox(
+        "Select Line",
+        options=sorted(direction_df['line'].unique()),
+        key="direction_line"
+    )
+
+    # Filter data for selected line
+    line_data = direction_df[direction_df['line'] == selected_line]
+
+    # Define direction labels based on line
+    if selected_line in ['hammersmith-city', 'metropolitan']:
+        line_data['direction'] = line_data['direction'].map({
+            'outbound': 'West to KC',
+            'inbound': 'East to KC'
+        })
+    elif selected_line in ['victoria', 'northern']:
+        line_data['direction'] = line_data['direction'].map({
+            'outbound': 'South to KC',
+            'inbound': 'North to KC'
+        })
+    elif selected_line == 'piccadilly':
+        line_data['direction'] = line_data['direction'].map({
+            'outbound': 'South West to KC',
+            'inbound': 'North East to KC'
+        })
+
+    # Create bar plot
+    fig = px.bar(
+        line_data,
+        x='direction',
+        y='accuracy_30s',
+        title=f"Prediction Accuracy by Direction - {selected_line.title()}",
+        labels={
+            'direction': 'Direction',
+            'accuracy_30s': 'Accuracy % (±30s)',
+            'avg_error': 'Average Error (seconds)',
+            'avg_abs_error': 'Average Absolute Error (seconds)'
+        },
+        hover_data=['avg_error','avg_abs_error']
+    )
+
+    # Update layout
+    fig.update_layout(
+        height=600,
+        showlegend=False,
+        bargap=0.3,
+        yaxis=dict(
+            range=[0, 100],
+            title='Accuracy %'
+        )
+    )
+
+    # Add value labels on top of bars
+    fig.update_traces(
+        texttemplate='%{y:.1f}%',
+        textposition='outside'
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Show total predictions for each direction
+    st.subheader("Total Predictions by Direction")
+    for _, row in line_data.iterrows():
+        st.write(f"{row['direction']}: {row['total_predictions']:,.0f} predictions")
+
+with tab11:
+    st.header("Prediction Drift Analysis")
+
+    st.markdown(""" How did the accuracy vary throughout the last 14 days?
+    """)
+
+    # Query to analyze prediction drift over time
+    drift_query = """
+    WITH daily_stats AS (
+    SELECT 
+        DATE(arrival_timestamp) as date,
+        line,
+        COUNT(*) as total_predictions,
+        ROUND(COUNTIF(ABS(error_seconds) <= 30) / COUNT(*) * 100, 1) as accuracy_percentage,
+        ROUND(AVG(error_seconds), 1) as avg_error,
+        ROUND(AVG(ABS(error_seconds)), 1) as avg_abs_error
+    FROM `nico-playground-384514.transport_predictions.any_errors`
+    WHERE DATE(arrival_timestamp) >= DATE_SUB(CURRENT_DATE(), INTERVAL 14 DAY)
+    GROUP BY date, line
+    )
+    SELECT *
+    FROM daily_stats
+    ORDER BY date, line
+    """
+
+    drift_df = get_cached_query(drift_query)
+
+    if not drift_df.empty:
+    # Create line chart for accuracy over time
+        fig = px.line(
+        drift_df,
+        x='date',
+        y='accuracy_percentage',
+        color='line',
+        title="Prediction Accuracy Over Time (Last few days)",
+        labels={
+            'date': 'Date',
+            'accuracy_percentage': 'Accuracy % (±30s)',
+            'line': 'Tube Line',
+            'avg_error': 'Average Error (seconds)',
+            'avg_abs_error': 'Average Absolute Error (seconds)'
+        }
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Add trend analysis
+    st.subheader("Trend Analysis")
+    col1, col2 = st.columns(2)
+
+    with col1:
+        # Calculate overall trend
+        overall_trend = drift_df.groupby('date')['accuracy_percentage'].mean().reset_index()
+        if len(overall_trend) > 1:
+            # Sort by date to ensure correct order
+            overall_trend = overall_trend.sort_values('date')
+            # Get the last 14 days
+            last_14_days = overall_trend.tail(14)
+            if len(last_14_days) >= 14:
+                # Split into two weeks
+                last_week = last_14_days.tail(7)['accuracy_percentage'].mean()
+                previous_week = last_14_days.head(7)['accuracy_percentage'].mean()
+                trend = last_week - previous_week
+            st.metric(
+                "Overall Accuracy Trend",
+                f"{trend:+.1f}%",
+                "Change in last 7 days vs previous 7 days"
+            )
+
+    with col2:
+        # Most improved line
+        line_trends = drift_df.groupby('line').apply(
+            lambda x: x.sort_values('date').tail(14).tail(7)['accuracy_percentage'].mean() - 
+                        x.sort_values('date').tail(14).head(7)['accuracy_percentage'].mean()
+        ).sort_values(ascending=False)
+        if not line_trends.empty:
+            st.metric(
+                "Most Improved Line",
+                f"{line_trends.index[0]} ({line_trends.iloc[0]:+.1f}%)",
+                "Change in last 7 days vs previous 7 days"
+            )
+
+
+with tab12:
+    st.header("Error Pattern Analysis")
+
+    st.markdown(""" Which lines have the most observations? Which lines have the most early arrivals? Which lines have the most late arrivals?
+    """)
+
+    # Query to analyze error patterns
+    error_pattern_query = """
+    WITH error_analysis AS (
+    SELECT 
+        line,
+        CASE 
+            WHEN error_seconds > 30 THEN 'Early Arrival'
+            WHEN error_seconds < -30 THEN 'Late Arrival'
+            ELSE 'Accurate'
+        END as error_type,
+        COUNT(*) as count,
+        ROUND(AVG(error_seconds), 1) as avg_error,
+        ROUND(AVG(ABS(error_seconds)), 1) as avg_abs_error,
+        ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (PARTITION BY line), 1) as percentage
+    FROM `nico-playground-384514.transport_predictions.any_errors`
+    GROUP BY line, error_type
+    )
+    SELECT *
+    FROM error_analysis
+    ORDER BY line, error_type
+    """
+
+    error_df = get_cached_query(error_pattern_query)
+
+    if not error_df.empty:
+    # Create stacked bar chart for error types by line
+        fig = px.bar(
+        error_df,
+        x='line',
+        y='count',
+        color='error_type',
+        title="Prediction Error Types by Line",
+        labels={
+            'line': 'Tube Line',
+            'count': 'Number of Predictions',
+            'error_type': 'Error Type',
+            'avg_error': 'Average Error (seconds)',
+            'avg_abs_error': 'Average Absolute Error (seconds)'
+        },
+        hover_data=['avg_error','avg_abs_error']
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Add summary statistics
+    st.subheader("Error Pattern Summary")
+    col1, col2 = st.columns(2)
+
+    with col1:
+        # Most overestimated line
+        overestimate = error_df[error_df['error_type'] == 'Early Arrival'].sort_values('percentage', ascending=False)
+        if not overestimate.empty:
+            st.metric(
+                "Earliest Line",
+                f"{overestimate.iloc[0]['line']} ({overestimate.iloc[0]['percentage']:.1f}%)",
+                f"Avg Error: {overestimate.iloc[0]['avg_error']:.1f}s"
+            )
+
+    with col2:
+        # Most underestimated line
+        underestimate = error_df[error_df['error_type'] == 'Late Arrival'].sort_values('percentage', ascending=False)
+        if not underestimate.empty:
+            st.metric(
+                "Latest Line",
+                f"{underestimate.iloc[0]['line']} ({underestimate.iloc[0]['percentage']:.1f}%)",
+                f"Avg Error: {underestimate.iloc[0]['avg_error']:.1f}s"
+            )
+
+with tab13:
+    st.header("Line Interaction Analysis")
+
+    st.markdown("""
+    What is line interaction analysis? 
+    What is the best and worst line sequence?
+
+    The visualization shows:
+    - A heatmap where each cell represents a combination of two lines
+    - Those that have just arrived are on the y axis, and those that arrived previous to these on the x axis.
+    - The color intensity shows the average prediction accuracy for that line combination (for some reason, it says sum of accuracy, but it's actually the average)
+    - Darker colors indicate higher accuracy
+    """)
+
+    # Query to analyze line interactions
+    interaction_query = """
+    WITH time_windows AS (
+    SELECT 
+        arrival_timestamp,
+        line,
+        error_seconds,
+        LAG(line) OVER (ORDER BY arrival_timestamp) as prev_line,
+        LAG(error_seconds) OVER (ORDER BY arrival_timestamp) as prev_error
+    FROM `nico-playground-384514.transport_predictions.any_errors`
+    ),
+    interactions AS (
+    SELECT 
+        line,
+        prev_line,
+        COUNT(*) as interaction_count,
+        ROUND(AVG(error_seconds), 1) as avg_error,
+        ROUND(AVG(ABS(error_seconds)), 1) as avg_abs_error,
+        ROUND(COUNTIF(ABS(error_seconds) <= 30) / COUNT(*) * 100, 1) as accuracy_percentage
+    FROM time_windows
+    WHERE prev_line IS NOT NULL
+    GROUP BY line, prev_line
+    )
+    SELECT *
+    FROM interactions
+    ORDER BY interaction_count DESC
+    """
+
+    interaction_df = get_cached_query(interaction_query)
+
+    if not interaction_df.empty:
+    # Create heatmap for line interactions
+        fig = px.density_heatmap(
+        interaction_df,
+        x='prev_line',
+        y='line',
+        z='accuracy_percentage',
+        title="Prediction Accuracy by Line Sequence",
+        labels={
+            'prev_line': 'Previous Line',
+            'line': 'Current Line',
+            'accuracy_percentage': 'Accuracy % (±30s)',
+            'avg_error': 'Average Error (seconds)',
+            'avg_abs_error': 'Average Absolute Error (seconds)'
+        },
+        hover_data=['avg_error','avg_abs_error']
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+    # Add interaction summary
+    st.subheader("Line Interaction Summary")
+    col1, col2 = st.columns(2)
+
+    with col1:
+        # Best line sequence
+        best_sequence = interaction_df.loc[interaction_df['accuracy_percentage'].idxmax()]
+        st.metric(
+            "Best Line Sequence",
+            f"{best_sequence['prev_line']} → {best_sequence['line']}",
+            f"{best_sequence['accuracy_percentage']:.1f}% accuracy"
+        )
+
+    with col2:
+        # Worst line sequence
+        worst_sequence = interaction_df.loc[interaction_df['accuracy_percentage'].idxmin()]
+        st.metric(
+            "Worst Line Sequence",
+            f"{worst_sequence['prev_line']} → {worst_sequence['line']}",
+            f"{worst_sequence['accuracy_percentage']:.1f}% accuracy"
+        )
+
