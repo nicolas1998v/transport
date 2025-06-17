@@ -309,9 +309,9 @@ def load_latest_results():
             if len(merged_df) > 10000:
                 # Sample 13,000 points to ensure we get enough valid ones
                 sampled_df = merged_df.sample(n=13000, random_state=42)
-                # Filter for valid points (where journey_time is not None and coordinates exist)
+                # Filter for valid points (where journey_times is not None and coordinates exist)
                 valid_points = sampled_df[
-                    (sampled_df['journey_time'].notna()) & 
+                    (sampled_df['journey_times'].notna()) & 
                     (sampled_df['latitude'].notna()) & 
                     (sampled_df['longitude'].notna())
                 ]
