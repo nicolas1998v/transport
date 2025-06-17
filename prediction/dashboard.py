@@ -371,7 +371,7 @@ def rename_station(station):
 LINE_COLORS = {
     'northern': '#E32017',      # Red
     'metropolitan': '#003688',  # Dark Blue
-    'hammersmith-city': '#0098D4', # Light Blue
+    'hammersmith-city': '#00BFFF', # Light Blue
     'piccadilly': '#F3A9BB',    # Salmon Pink
     'victoria': '#95CDBA'}     # Green Turquoise}
 
@@ -1729,7 +1729,7 @@ with tab4:
             color_discrete_map={
                     'northern': '#E32017',      # Red
                     'metropolitan': '#003688',  # Dark Blue
-                    'hammersmith-city': '#0098D4', # Light Blue
+                    'hammersmith-city': '#00BFFF', # Light Blue
                     'piccadilly': '#F3A9BB',    # Salmon Pink
                     'victoria': '#95CDBA'}     # Green Turquoise
                     )
@@ -1763,7 +1763,7 @@ with tab4:
                     color_discrete_map={
                     'northern': '#E32017',      # Red
                     'metropolitan': '#003688',  # Dark Blue
-                    'hammersmith-city': '#0098D4', # Light Blue
+                    'hammersmith-city': '#00BFFF', # Light Blue
                     'piccadilly': '#F3A9BB',    # Salmon Pink
                     'victoria': '#95CDBA'}     # Green Turquoise
             )
