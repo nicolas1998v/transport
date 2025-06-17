@@ -148,12 +148,12 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13
     "Prediction Precision Analysis", 
     "Location Analysis",
     "Anomaly Detection",
-    "Weather Impact Analysis"
-    "Event Analysis"
-    "Peak Time Analysis"
-    "Direction Analysis"
-    "Prediction Drift Analyis"
-    "Error Pattern Analysis"
+    "Weather Impact Analysis",
+    "Event Analysis",
+    "Peak Time Analysis",
+    "Direction Analysis",
+    "Prediction Drift Analyis",
+    "Error Pattern Analysis",
     "Line Interaction Analysis"
 ])
 
