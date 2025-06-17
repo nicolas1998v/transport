@@ -307,8 +307,12 @@ def load_latest_results():
             
             # Sample the data before caching and returning
             if len(merged_df) > 10000:
-                merged_df = merged_df.sample(n=10000, random_state=42)
-                st.info(f"📊 Note: Map shows 10,000 sampled points for better performance")
+                # Calculate how many points we need to sample to get 10,000 valid points
+                # Assuming a similar ratio of valid points as in the current dataset
+                valid_ratio = len(merged_df) / total_processed
+                sample_size = int(10000 / valid_ratio)
+                merged_df = merged_df.sample(n=sample_size, random_state=42)
+                st.info(f"📊 Note: Map shows 10,000 points sampled from {total_processed:,} total postcodes")
             
             # Cache the sampled data
             cache_start = time.time()
