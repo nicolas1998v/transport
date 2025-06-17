@@ -174,7 +174,7 @@ def create_map(data):
         color = colormap(duration_capped)
         # Create a simple div icon instead of CircleMarker
         icon = folium.DivIcon(
-            html=f'<div style="background-color: {color}; width: 6px; height: 6px; border-radius: 50%;"></div>'
+            html=f'<div style="background-color: {color}; width: 10px; height: 10px; border-radius: 50%;"></div>'
         )
         folium.Marker(
             location=[lat, lon],
