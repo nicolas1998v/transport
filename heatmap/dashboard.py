@@ -153,17 +153,34 @@ def create_map(data):
         icon=folium.Icon(color='blue', icon='info-sign')
     ).add_to(m)
     
-    # Add points
+    # Optimize: Sample data if too many points
+    if len(data) > 10000:
+        # Sample data while preserving distribution
+        data = data.sample(n=10000, random_state=42)
+        st.info(f"📊 Note: Map shows 10,000 sampled points for better performance")
+    
+    # Optimize: Batch points using FeatureGroup
     points_start = time.time()
-    for idx, row in data.iterrows():
-        duration_capped = min(float(row['duration']), 160)
+    fg = folium.FeatureGroup(name='Journey Times')
+    
+    # Prepare data for batch processing
+    locations = data[['Latitude', 'Longitude']].values
+    durations = data['duration'].values
+    postcodes = data['postcode'].values
+    
+    # Create markers in batches
+    for lat, lon, duration, postcode in zip(locations[:, 0], locations[:, 1], durations, postcodes):
+        duration_capped = min(float(duration), 160)
         folium.CircleMarker(
-            location=[row['Latitude'], row['Longitude']],
-            radius=4,
+            location=[lat, lon],
+            radius=3,  # Slightly smaller radius
             color=colormap(duration_capped),
             fill=True,
-            popup=f"Postcode: {row['postcode']}<br>Travel time: {row['duration']} mins"
-        ).add_to(m)
+            popup=f"{postcode}: {duration:.0f}min",  # Simplified popup
+            weight=1  # Thinner border
+        ).add_to(fg)
+    
+    fg.add_to(m)
     points_time = time.time() - points_start
     
     # Add color scale
