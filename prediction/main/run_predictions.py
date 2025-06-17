@@ -45,7 +45,7 @@ def run_forever():
              
             # Calculate how long to sleep 
             cycle_duration = (datetime.now() - cycle_start).total_seconds() 
-            sleep_time = max(0, 33 - cycle_duration)  # Run every 33 seconds 
+            sleep_time = max(0, 60 - cycle_duration)  # Run every 60 seconds 
              
             logger.info(f"Cycle took {cycle_duration:.1f}s, sleeping for {sleep_time:.1f}s") 
             time.sleep(sleep_time)

@@ -262,51 +262,35 @@ def collect_predictions(request):
                         
                         try:
                             print(f"Running initial_errors query for train: {train_id}")
-                            one_min_ago = current_time - timedelta(minutes=1)
-                            one_min_ago_str = one_min_ago.isoformat()
                             line = row['line']
                             initial_prediction_timestamp = row['initial_prediction_timestamp']
                             arrival_timestamp = row['arrival_timestamp']
                             direction = row['direction']
                             initial_errors_query = f"""
                                 INSERT INTO `nico-playground-384514.transport_predictions.initial_errors`
-                                WITH initial_locations AS (
+                                WITH recent_data AS (
                                     SELECT 
                                         train_id,
-                                        initial_prediction_timestamp,
                                         current_location,
+                                        time_to_station
                                     FROM `nico-playground-384514.transport_predictions.prediction_history`
-                                    WHERE initial_prediction_timestamp IS NOT NULL
-                                    AND initial_prediction_timestamp >= TIMESTAMP_SUB(TIMESTAMP('{one_min_ago_str}'), INTERVAL 95 MINUTE)
+                                    WHERE initial_prediction_timestamp = TIMESTAMP('{initial_prediction_timestamp}')
                                     AND train_id = '{train_id}'
-                                    order by initial_prediction_timestamp desc
+                                    order by timestamp asc
                                     limit 1
-                                ),
-                                max_times AS (
-                                    SELECT 
-                                        train_id,
-                                        initial_prediction_timestamp,
-                                        MAX(time_to_station) as max_time_to_station
-                                    FROM `nico-playground-384514.transport_predictions.prediction_history`
-                                    WHERE initial_prediction_timestamp >= TIMESTAMP_SUB(TIMESTAMP('{one_min_ago_str}'), INTERVAL 95 MINUTE)
-                                    AND train_id = '{train_id}'
-                                    GROUP BY train_id, initial_prediction_timestamp
                                 )
-                                SELECT DISTINCT
+                                SELECT 
                                     '{train_id}' as train_id,
                                     '{line}' as line,
                                     TIMESTAMP('{initial_prediction_timestamp}') as initial_prediction_timestamp,
                                     TIMESTAMP('{arrival_timestamp}') as arrival_timestamp,
                                     TIMESTAMP_DIFF(TIMESTAMP('{initial_prediction_timestamp}'), TIMESTAMP('{arrival_timestamp}'), SECOND) as error_seconds,
-                                    mt.max_time_to_station as time_to_station,
+                                    time_to_station,
                                     EXTRACT(HOUR FROM TIMESTAMP('{arrival_timestamp}')) as hour,
                                     EXTRACT(DAYOFWEEK FROM TIMESTAMP('{arrival_timestamp}')) - 1 as day_of_week,
                                     '{direction}' as direction,
-                                    il.current_location
-                                FROM initial_locations il
-                                LEFT JOIN max_times mt
-                                    ON il.train_id = mt.train_id
-                                    AND il.initial_prediction_timestamp = mt.initial_prediction_timestamp
+                                    current_location
+                                FROM recent_data
                                 """
                             print(f"Query: {initial_errors_query}")  # Print the actual query
                             client.query(initial_errors_query)
@@ -333,18 +317,9 @@ def collect_predictions(request):
                                 direction
                             FROM `nico-playground-384514.transport_predictions.prediction_history`
                             WHERE train_id = '{train_id}'
-                            AND timestamp >= (
-                                SELECT timestamp 
-                                FROM `nico-playground-384514.transport_predictions.prediction_history`
-                                WHERE train_id = '{train_id}'
-                                AND any_prediction_timestamp IS NULL
-                                AND arrival_timestamp IS NULL
-                                AND timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 95 MINUTE) 
-                                ORDER BY TIMESTAMP DESC
-                                LIMIT 1
-                            )
+                            and initial_prediction_timestamp =  TIMESTAMP('{initial_prediction_timestamp}')
                             AND any_prediction_timestamp IS NOT NULL
-                            ORDER BY timestamp ASC
+                            ORDER BY timestamp desc
                         """
 
                         client.query(any_errors_query)
