@@ -14,6 +14,7 @@ import zlib
 import base64
 from io import StringIO
 import io
+import time
 
 # Initialize Redis connection
 redis_client = None
@@ -211,14 +212,19 @@ def filter_anomalies(df, threshold=0.3, min_neighbors=12):
 @st.cache_data(ttl=3600)
 def load_latest_results():
     """Load the most recent journey times results from both batches"""
+    start_time = time.time()
     try:
         # Get current time and subtract 1 hour
         current_time = datetime.now() + timedelta(hours=1)
         target_hour = (current_time - timedelta(hours=1)).strftime('%Y%m%d_%H')
         
         # Try to get data from Redis cache first
+        cache_start = time.time()
         cached_data = get_cached_data(target_hour)
+        cache_time = time.time() - cache_start
+        
         if cached_data is not None:
+            st.info(f"✅ Data loaded from cache in {cache_time:.2f} seconds")
             return {
                 'data': cached_data,
                 'timestamp': target_hour,
@@ -228,6 +234,7 @@ def load_latest_results():
         
         with st.spinner('Loading journey time data...'):
             # List all result files
+            gcs_start = time.time()
             blobs = list(bucket.list_blobs(prefix='results/journey_times_'))
             if not blobs:
                 return None
@@ -271,8 +278,18 @@ def load_latest_results():
                                right_on='Postcode', 
                                how='inner')
             
+            gcs_time = time.time() - gcs_start
+            
             # Cache the merged data
+            cache_start = time.time()
             cache_data(merged_df, target_hour)
+            cache_time = time.time() - cache_start
+            
+            total_time = time.time() - start_time
+            st.info(f"⏱️ Performance metrics:\n"
+                   f"- GCS data loading: {gcs_time:.2f} seconds\n"
+                   f"- Caching data: {cache_time:.2f} seconds\n"
+                   f"- Total loading time: {total_time:.2f} seconds")
             
             return {
                 'data': merged_df,
