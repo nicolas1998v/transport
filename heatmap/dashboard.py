@@ -131,12 +131,21 @@ def create_map(data):
     """Create a map with color-coded points"""
     map_start = time.time()
     
-    # Create base map
+    # Create base map with optimized tile layer
     m = folium.Map(
         location=[51.4995, -0.1248],
         zoom_start=11,
-        tiles='cartodbpositron'
+        tiles=None,  # Start with no tiles
+        prefer_canvas=True  # Use canvas renderer for better performance
     )
+    
+    # Add optimized tile layer
+    folium.TileLayer(
+        'cartodbpositron',
+        name='Light Map',
+        control=False,  # Don't show in layer control
+        opacity=0.8
+    ).add_to(m)
     
     # Create color map
     colormap = cm.LinearColormap(
@@ -161,26 +170,47 @@ def create_map(data):
     
     # Optimize: Batch points using FeatureGroup
     points_start = time.time()
-    fg = folium.FeatureGroup(name='Journey Times')
+    
+    # Create separate feature groups for different duration ranges
+    fg_short = folium.FeatureGroup(name='Short Journeys (< 30min)', show=True)
+    fg_medium = folium.FeatureGroup(name='Medium Journeys (30-60min)', show=True)
+    fg_long = folium.FeatureGroup(name='Long Journeys (> 60min)', show=True)
     
     # Prepare data for batch processing
     locations = data[['Latitude', 'Longitude']].values
     durations = data['duration'].values
     postcodes = data['postcode'].values
     
-    # Create markers in batches
+    # Create markers in batches with optimized settings
     for lat, lon, duration, postcode in zip(locations[:, 0], locations[:, 1], durations, postcodes):
         duration_capped = min(float(duration), 160)
-        folium.CircleMarker(
+        marker = folium.CircleMarker(
             location=[lat, lon],
-            radius=3,  # Slightly smaller radius
+            radius=4,  # Slightly smaller radius
             color=colormap(duration_capped),
             fill=True,
-            popup=f"{postcode}: {duration:.0f}min",  # Simplified popup
-            weight=1  # Thinner border
-        ).add_to(fg)
+            popup=f"{postcode}: {duration:.0f}min",
+            weight=0,  # No border
+            opacity=0.7,  # Slightly transparent
+            fill_opacity=0.7
+        )
+        
+        # Add to appropriate feature group based on duration
+        if duration < 30:
+            marker.add_to(fg_short)
+        elif duration < 60:
+            marker.add_to(fg_medium)
+        else:
+            marker.add_to(fg_long)
     
-    fg.add_to(m)
+    # Add feature groups to map
+    fg_short.add_to(m)
+    fg_medium.add_to(m)
+    fg_long.add_to(m)
+    
+    # Add layer control
+    folium.LayerControl(collapsed=False).add_to(m)
+    
     points_time = time.time() - points_start
     
     # Add color scale
@@ -357,8 +387,11 @@ if results is not None:
     st.subheader('Journey Time Heatmap')
     st.caption(f"Showing {len(filtered_df):,} points out of {len(data):,} total valid postcodes")
     
+    # Add a note about layer controls
+    st.info("💡 Tip: Use the layer control in the top right to show/hide different journey duration ranges")
+    
     display_start = time.time()
-    folium_static(m)
+    folium_static(m, width=800, height=600)  # Set fixed dimensions
     display_time = time.time() - display_start
     
     st.info(f"📊 Display metrics:\n"
