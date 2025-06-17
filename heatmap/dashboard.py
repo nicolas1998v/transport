@@ -159,31 +159,30 @@ def create_map(data):
         data = data.sample(n=10000, random_state=42)
         st.info(f"📊 Note: Map shows 10,000 sampled points for better performance")
     
+    # Optimize: Batch points using FeatureGroup
     points_start = time.time()
+    fg = folium.FeatureGroup(name='Journey Times')
     
-    # Create heatmap data
-    heat_data = []
-    for _, row in data.iterrows():
-        duration_capped = min(float(row['duration']), 160)
-        # Normalize duration to 0-1 range for intensity
-        intensity = (duration_capped - data['duration'].min()) / (data['duration'].max() - data['duration'].min())
-        heat_data.append([row['Latitude'], row['Longitude'], intensity])
+    # Prepare data for batch processing
+    locations = data[['Latitude', 'Longitude']].values
+    durations = data['duration'].values
+    postcodes = data['postcode'].values
     
-    # Add heatmap layer
-    folium.plugins.HeatMap(
-        heat_data,
-        radius=8,
-        blur=6,
-        max_zoom=1,
-        min_opacity=0.5,
-        gradient={
-            0.2: 'green',
-            0.4: 'yellow',
-            0.6: 'orange',
-            0.8: 'red'
-        }
-    ).add_to(m)
+    # Create markers in batches using DivIcon for better performance
+    for lat, lon, duration, postcode in zip(locations[:, 0], locations[:, 1], durations, postcodes):
+        duration_capped = min(float(duration), 160)
+        color = colormap(duration_capped)
+        # Create a simple div icon instead of CircleMarker
+        icon = folium.DivIcon(
+            html=f'<div style="background-color: {color}; width: 6px; height: 6px; border-radius: 50%;"></div>'
+        )
+        folium.Marker(
+            location=[lat, lon],
+            icon=icon,
+            popup=f"{postcode}: {duration:.0f}min"
+        ).add_to(fg)
     
+    fg.add_to(m)
     points_time = time.time() - points_start
     
     # Add color scale
