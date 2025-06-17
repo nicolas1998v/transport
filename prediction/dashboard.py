@@ -789,15 +789,16 @@ with tab1:
             avg_error = line_data['avg_error']
             avg_time = line_data['avg_time']
             error_rate = line_data['error_rate_per_minute']
+            color = LINE_COLORS.get(line.lower(), '#000000')  # Default to black if line not found
         
             if abs(correlation) > 0.5:
                 strength = "strong" if abs(correlation) > 0.7 else "moderate"
                 direction = "positive" if correlation > 0 else "negative"
-                st.markdown(f"<span style='color: {color};'>{line.title()} line</span> shows a {strength} {direction} correlation of {correlation:.2f}. For every minute increase in time to station,{'the arrival is earlier than its prediction by' if correlation > 0 else 'the arrival is later than its prediction by'} {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s.</p>", unsafe_allow_html=True)
+                st.markdown(f"<span style='color: {color};'>{line.title()} line</span> shows a {strength} {direction} correlation of {correlation:.2f}. For every minute increase in time to station, {'the arrival timestamp is earlier than its prediction by' if correlation > 0 else 'the arrival timestamp is later than its prediction by'} {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s.</p>", unsafe_allow_html=True)
             elif abs(correlation) > 0.3:
-                st.markdown(f"<span style='color: {color};'>{line.title()} line</span> shows a weak correlation of {correlation:.2f}. For every minute increase in time to station,{'the arrival is earlier than its prediction by' if correlation > 0 else 'the arrival is later than its prediction by'} {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s.</p>", unsafe_allow_html=True)
+                st.markdown(f"<span style='color: {color};'>{line.title()} line</span> shows a weak correlation of {correlation:.2f}. For every minute increase in time to station, {'the arrival timestamp is earlier than its prediction by' if correlation > 0 else 'the arrival timestamp is later than its prediction by'} {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s.</p>", unsafe_allow_html=True)
             else:
-                st.markdown(f"<span style='color: {color};'>{line.title()} line</span> shows minimal correlation of {correlation:.2f}. For every minute increase in time to station, {'the arrival is earlier than its prediction by' if correlation > 0 else 'the arrival timestamp is later than the prediction by'} {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s.</p>", unsafe_allow_html=True)
+                st.markdown(f"<span style='color: {color};'>{line.title()} line</span> shows minimal correlation of {correlation:.2f}. For every minute increase in time to station, {'the arrival timestamp is earlier than its prediction by' if correlation > 0 else 'the arrival timestamp is later than the prediction by'} {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s.</p>", unsafe_allow_html=True)
             
                 col1, col2, col3 = st.columns(3)
         with col1:
@@ -900,15 +901,16 @@ with tab1:
             avg_error = line_data['avg_error']
             avg_time = line_data['avg_time']
             error_rate = line_data['error_rate_per_minute']
+            color = LINE_COLORS.get(line.lower(), '#000000')  # Default to black if line not found
         
             if abs(correlation) > 0.5:
                 strength = "strong" if abs(correlation) > 0.7 else "moderate"
                 direction = "positive" if correlation > 0 else "negative"
-                st.markdown(f"<span style='color: {color};'>{line.title()} line</span> shows a {strength} {direction} correlation of {correlation:.2f}. For every minute increase in time to station,{'the arrival is earlier than its prediction by' if correlation > 0 else 'the arrival is later than its prediction by'} {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s.</p>", unsafe_allow_html=True)
+                st.markdown(f"<span style='color: {color};'>{line.title()} line</span> shows a {strength} {direction} correlation of {correlation:.2f}. For every minute increase in time to station, {'the arrival timestamp is earlier than its prediction by' if correlation > 0 else 'the arrival timestamp is later than its prediction by'} {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s.</p>", unsafe_allow_html=True)
             elif abs(correlation) > 0.3:
-                st.markdown(f"<span style='color: {color};'>{line.title()} line</span> shows a weak correlation of {correlation:.2f}. For every minute increase in time to station,{'the arrival is earlier than its prediction by' if correlation > 0 else 'the arrival is later than its prediction by'} {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s.</p>", unsafe_allow_html=True)
+                st.markdown(f"<span style='color: {color};'>{line.title()} line</span> shows a weak correlation of {correlation:.2f}. For every minute increase in time to station, {'the arrival timestamp is earlier than its prediction by' if correlation > 0 else 'the arrival timestamp is later than its prediction by'} {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s.</p>", unsafe_allow_html=True)
             else:
-                st.markdown(f"<span style='color: {color};'>{line.title()} line</span> shows minimal correlation of {correlation:.2f}. For every minute increase in time to station,{'the arrival is earlier than its prediction by' if correlation > 0 else 'the arrival timestamp is later than the prediction by'} {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s.</p>", unsafe_allow_html=True)
+                st.markdown(f"<span style='color: {color};'>{line.title()} line</span> shows minimal correlation of {correlation:.2f}. For every minute increase in time to station, {'the arrival timestamp is earlier than its prediction by' if correlation > 0 else 'the arrival timestamp is later than the prediction by'} {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s.</p>", unsafe_allow_html=True)
             
                 col1, col2, col3 = st.columns(3)
         with col1:
@@ -1123,11 +1125,11 @@ with tab2:
             if abs(correlation) > 0.5:
                 strength = "strong" if abs(correlation) > 0.7 else "moderate"
                 direction = "positive" if correlation > 0 else "negative"
-                st.markdown(f"<span style='color: {color};'>{line.title()} line</span> shows a {strength} {direction} correlation of {correlation:.2f}. For every minute increase in time to station,{'the arrival is earlier than its prediction by' if correlation > 0 else 'the arrival is later than its prediction by'} {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s.</p>", unsafe_allow_html=True)
+                st.markdown(f"<span style='color: {color};'>{line.title()} line</span> shows a {strength} {direction} correlation of {correlation:.2f}. For every minute increase in time to station, {'the arrival timestamp is earlier than its prediction by' if correlation > 0 else 'the arrival timestamp is later than its prediction by'} {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s.</p>", unsafe_allow_html=True)
             elif abs(correlation) > 0.3:
-                st.markdown(f"<span style='color: {color};'>{line.title()} line</span> shows a weak correlation of {correlation:.2f}. For every minute increase in time to station,{'the arrival is earlier than its prediction by' if correlation > 0 else 'the arrival is later than its prediction by'} {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s.</p>", unsafe_allow_html=True)
+                st.markdown(f"<span style='color: {color};'>{line.title()} line</span> shows a weak correlation of {correlation:.2f}. For every minute increase in time to station, {'the arrival timestamp is earlier than its prediction by' if correlation > 0 else 'the arrival timestamp is later than its prediction by'} {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s.</p>", unsafe_allow_html=True)
             else:
-                st.markdown(f"<span style='color: {color};'>{line.title()} line</span> shows minimal correlation of {correlation:.2f}. For every minute increase in time to station, {'the arrival is earlier than its prediction by' if correlation > 0 else 'the arrival timestamp is later than the prediction by'} {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s.</p>", unsafe_allow_html=True)
+                st.markdown(f"<span style='color: {color};'>{line.title()} line</span> shows minimal correlation of {correlation:.2f}. For every minute increase in time to station, {'the arrival timestamp is earlier than its prediction by' if correlation > 0 else 'the arrival timestamp is later than the prediction by'} {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s.</p>", unsafe_allow_html=True)
         
         st.info ("""⚠️ Insight ! Many correlations have switched signs with respect to the last tab! This means that predictions are pessimistic when they are the furthest away and then they become increasingly optimistic the further they go along the rail network.""")
         col1, col2, col3 = st.columns(3)
@@ -1279,11 +1281,11 @@ with tab2:
             if abs(correlation) > 0.5:
                 strength = "strong" if abs(correlation) > 0.7 else "moderate"
                 direction = "positive" if correlation > 0 else "negative"
-                st.markdown(f"<span style='color: {color};'>{line.title()} line</span> shows a {strength} {direction} correlation of {correlation:.2f}. For every minute increase in time to station,{'the arrival is earlier than its prediction by' if correlation > 0 else 'the arrival is later than its prediction by'} {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s.</p>", unsafe_allow_html=True)
+                st.markdown(f"<span style='color: {color};'>{line.title()} line</span> shows a {strength} {direction} correlation of {correlation:.2f}. For every minute increase in time to station, {'the arrival timestamp is earlier than its prediction by' if correlation > 0 else 'the arrival timestamp is later than its prediction by'} {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s.</p>", unsafe_allow_html=True)
             elif abs(correlation) > 0.3:
-                st.markdown(f"<span style='color: {color};'>{line.title()} line</span> shows a weak correlation of {correlation:.2f}. For every minute increase in time to station,{'the arrival is earlier than its prediction by' if correlation > 0 else 'the arrival is later than its prediction by'} {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s.</p>", unsafe_allow_html=True)
+                st.markdown(f"<span style='color: {color};'>{line.title()} line</span> shows a weak correlation of {correlation:.2f}. For every minute increase in time to station, {'the arrival timestamp is earlier than its prediction by' if correlation > 0 else 'the arrival timestamp is later than its prediction by'} {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s.</p>", unsafe_allow_html=True)
             else:
-                st.markdown(f"<span style='color: {color};'>{line.title()} line</span> shows minimal correlation of {correlation:.2f}. For every minute increase in time to station,{'the arrival is earlier than its prediction by' if correlation > 0 else 'the arrival is later than its prediction by'} {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s.</p>", unsafe_allow_html=True)
+                st.markdown(f"<span style='color: {color};'>{line.title()} line</span> shows minimal correlation of {correlation:.2f}. For every minute increase in time to station, {'the arrival timestamp is earlier than its prediction by' if correlation > 0 else 'the arrival timestamp is later than the prediction by'} {abs(error_rate):.1f} seconds. Average error: {avg_error:.0f}s.</p>", unsafe_allow_html=True)
         
         st.info ("""⚠️ Insight ! The outbound initial predictions seem more in line with their respective counterparts. Except for the Hammersmith and City line, whose initial predictions start somewhat accurately and then turn optimistic the further along it goes through the rail.""")
         
@@ -1723,8 +1725,14 @@ with tab4:
                 'avg_error': 'Average Error (seconds)',
                 'avg_abs_error': 'Average Absolute Error (seconds)'
             },
-            hover_data=['avg_error','avg_abs_error']
-        )
+            hover_data=['avg_error','avg_abs_error'],
+            color_discrete_map={
+                    'northern': '#E32017',      # Red
+                    'metropolitan': '#003688',  # Dark Blue
+                    'hammersmith-city': '#0098D4', # Light Blue
+                    'piccadilly': '#F3A9BB',    # Salmon Pink
+                    'victoria': '#95CDBA'}     # Green Turquoise
+                    )
         
         # Update layout
         fig.update_layout(
@@ -1751,8 +1759,14 @@ with tab4:
                 'avg_error': 'Average Error (seconds)',
                 'avg_abs_error': 'Average Absolute Error (seconds)'
             },
-            hover_data=['avg_error','avg_abs_error']
-        )
+            hover_data=['avg_error','avg_abs_error'],
+                    color_discrete_map={
+                    'northern': '#E32017',      # Red
+                    'metropolitan': '#003688',  # Dark Blue
+                    'hammersmith-city': '#0098D4', # Light Blue
+                    'piccadilly': '#F3A9BB',    # Salmon Pink
+                    'victoria': '#95CDBA'}     # Green Turquoise
+            )
         
         # Update layout
         fig.update_layout(
