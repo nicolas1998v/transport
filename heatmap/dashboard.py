@@ -7,9 +7,108 @@ from google.oauth2 import service_account
 import json
 from datetime import datetime, timedelta
 import branca.colormap as cm
-import io
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
+import redis
+import zlib
+import base64
+from io import StringIO
+
+# Initialize Redis connection
+redis_client = None
+try:
+    host = st.secrets["redis"]["host"]
+    port = int(st.secrets["redis"]["port"])
+    password = st.secrets["redis"]["password"]
+        
+    # Try connecting without SSL first
+    redis_client = redis.Redis(
+        host=host,
+        port=port,
+        password=password,
+        ssl=False,  # Try without SSL first
+        decode_responses=True,  # This will decode bytes to strings automatically
+        socket_timeout=5,
+        socket_connect_timeout=5
+    )
+    
+    if redis_client.ping():
+        print("Successfully connected to Redis without SSL")
+    else:
+        print("Failed to connect to Redis without SSL")
+        redis_client = None
+except Exception as e:
+    st.error(f"Error connecting to Redis without SSL: {str(e)}")
+    try:
+        # If that fails, try with SSL
+        redis_client = redis.Redis(
+            host=host,
+            port=port,
+            password=password,
+            ssl=True,
+            ssl_cert_reqs=None,
+            decode_responses=True,  # This will decode bytes to strings automatically
+            socket_timeout=5,
+            socket_connect_timeout=5
+        )
+        
+        if redis_client.ping():
+            st.success("Successfully connected to Redis with SSL")
+        else:
+            st.error("Failed to connect to Redis with SSL")
+            redis_client = None
+    except Exception as e:
+        st.error(f"Error connecting to Redis with SSL: {str(e)}")
+        redis_client = None
+
+def compress_data(data):
+    """Compress data before storing in Redis."""
+    json_str = data.to_json(orient='records', date_format='iso')
+    compressed = zlib.compress(json_str.encode())
+    return base64.b64encode(compressed).decode()
+
+def decompress_data(compressed_data):
+    """Decompress data retrieved from Redis."""
+    decoded = base64.b64decode(compressed_data)
+    decompressed = zlib.decompress(decoded)
+    return pd.read_json(StringIO(decompressed.decode()))
+
+def get_cache_key(timestamp):
+    """Generate a cache key for the current hour's data."""
+    return f"heatmap:{timestamp}"
+
+def get_cached_data(timestamp):
+    """Try to get data from Redis cache."""
+    if redis_client is None:
+        return None
+        
+    try:
+        cache_key = get_cache_key(timestamp)
+        cached_result = redis_client.get(cache_key)
+        if cached_result is not None:
+            return decompress_data(cached_result)
+    except Exception as e:
+        st.warning(f"Redis error: {str(e)}")
+    return None
+
+def cache_data(data, timestamp):
+    """Cache data in Redis."""
+    if redis_client is None:
+        return
+        
+    try:
+        cache_key = get_cache_key(timestamp)
+        compressed_data = compress_data(data)
+        
+        # Calculate seconds until next hour
+        current_time = datetime.now() + timedelta(hours=1)  # Add 1 hour to match VM time
+        next_hour = current_time.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+        seconds_until_next_hour = int((next_hour - current_time).total_seconds())
+        
+        # Cache until next hour
+        redis_client.setex(cache_key, seconds_until_next_hour, compressed_data)
+    except Exception as e:
+        st.warning(f"Redis error: {str(e)}")
 
 # Initialize GCP client with credentials from Streamlit secrets
 try:
@@ -112,6 +211,20 @@ def filter_anomalies(df, threshold=0.3, min_neighbors=12):
 def load_latest_results():
     """Load the most recent journey times results from both batches"""
     try:
+        # Get current time and subtract 1 hour
+        current_time = datetime.now() + timedelta(hours=1)
+        target_hour = (current_time - timedelta(hours=1)).strftime('%Y%m%d_%H')
+        
+        # Try to get data from Redis cache first
+        cached_data = get_cached_data(target_hour)
+        if cached_data is not None:
+            return {
+                'data': cached_data,
+                'timestamp': target_hour,
+                'total_processed': len(cached_data),
+                'batches': [1, 2]  # Assume both batches are available when cached
+            }
+        
         with st.spinner('Loading journey time data...'):
             # List all result files
             blobs = list(bucket.list_blobs(prefix='results/journey_times_'))
@@ -121,10 +234,6 @@ def load_latest_results():
             # Sort blobs by name (which includes timestamp)
             sorted_blobs = sorted(blobs, key=lambda x: x.name, reverse=True)
             
-            # Get current time and subtract 1 hour
-            current_time = datetime.now() + timedelta(hours=1)
-            target_hour = (current_time - timedelta(hours=1)).strftime('%Y%m%d_%H')
-                        
             # Get both batch files for the target hour
             batch1_blob = next((b for b in sorted_blobs if f'journey_times_{target_hour}_batch1' in b.name), None)
             batch2_blob = next((b for b in sorted_blobs if f'journey_times_{target_hour}_batch2' in b.name), None)
@@ -161,6 +270,9 @@ def load_latest_results():
                                right_on='Postcode', 
                                how='inner')
             
+            # Cache the merged data
+            cache_data(merged_df, target_hour)
+            
             return {
                 'data': merged_df,
                 'timestamp': target_hour,
@@ -173,7 +285,7 @@ def load_latest_results():
         return None
 
 st.title('London Journey Times from Houses of Parliament')
-st.caption('Fastest journey times from SW1A 2JR to all London postcodes, on tube, bus and walking')
+st.caption('Fastest journey times from SW1A 2JR to all London postcodes, via tube, bus and walking')
 
 # Update the timestamp display
 results = load_latest_results()
