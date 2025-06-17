@@ -13,6 +13,7 @@ import redis
 import zlib
 import base64
 from io import StringIO
+import io
 
 # Initialize Redis connection
 redis_client = None
