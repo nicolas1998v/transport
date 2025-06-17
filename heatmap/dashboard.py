@@ -307,11 +307,16 @@ def load_latest_results():
             
             # Sample the data before caching and returning
             if len(merged_df) > 10000:
-                # Calculate how many points we need to sample to get 10,000 valid points
-                # Assuming a similar ratio of valid points as in the current dataset
-                valid_ratio = len(merged_df) / total_processed
-                sample_size = int(10000 / valid_ratio)
-                merged_df = merged_df.sample(n=sample_size, random_state=42)
+                # Sample 13,000 points to ensure we get enough valid ones
+                sampled_df = merged_df.sample(n=13000, random_state=42)
+                # Filter for valid points (where journey_time is not None and coordinates exist)
+                valid_points = sampled_df[
+                    (sampled_df['journey_time'].notna()) & 
+                    (sampled_df['latitude'].notna()) & 
+                    (sampled_df['longitude'].notna())
+                ]
+                # Take first 10,000 valid points
+                merged_df = valid_points.head(10000)
                 st.info(f"📊 Note: Map shows 10,000 points sampled from {total_processed:,} total postcodes")
             
             # Cache the sampled data
