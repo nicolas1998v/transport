@@ -129,6 +129,8 @@ except Exception as e:
 
 def create_map(data):
     """Create a map with color-coded points"""
+    map_start = time.time()
+    
     # Create base map
     m = folium.Map(
         location=[51.4995, -0.1248],
@@ -152,6 +154,7 @@ def create_map(data):
     ).add_to(m)
     
     # Add points
+    points_start = time.time()
     for idx, row in data.iterrows():
         duration_capped = min(float(row['duration']), 160)
         folium.CircleMarker(
@@ -161,9 +164,15 @@ def create_map(data):
             fill=True,
             popup=f"Postcode: {row['postcode']}<br>Travel time: {row['duration']} mins"
         ).add_to(m)
+    points_time = time.time() - points_start
     
     # Add color scale
     colormap.add_to(m)
+    
+    total_time = time.time() - map_start
+    st.info(f"🗺️ Map creation metrics:\n"
+           f"- Adding {len(data):,} points: {points_time:.2f} seconds\n"
+           f"- Total map creation time: {total_time:.2f} seconds")
     
     return m
 
@@ -324,11 +333,20 @@ if results is not None:
     data = pd.DataFrame(results['data'])
     filtered_df = filter_anomalies(data)
     
+    map_start = time.time()
     m = create_map(filtered_df)
+    map_time = time.time() - map_start
     
     st.subheader('Journey Time Heatmap')
-    st.caption(f"Showing 10,000 points out of {len(filtered_df):,} total valid postcodes")
+    st.caption(f"Showing {len(filtered_df):,} points out of {len(data):,} total valid postcodes")
+    
+    display_start = time.time()
     folium_static(m)
+    display_time = time.time() - display_start
+    
+    st.info(f"📊 Display metrics:\n"
+           f"- Map rendering time: {display_time:.2f} seconds\n"
+           f"- Total visualization time: {map_time + display_time:.2f} seconds")
     
     # Show filtering stats
     total_points = len(data)
