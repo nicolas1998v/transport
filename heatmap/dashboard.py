@@ -305,7 +305,12 @@ def load_latest_results():
             
             gcs_time = time.time() - gcs_start
             
-            # Cache the merged data (will be sampled inside cache_data)
+            # Sample the data before caching and returning
+            if len(merged_df) > 10000:
+                merged_df = merged_df.sample(n=10000, random_state=42)
+                st.info(f"📊 Note: Map shows 10,000 sampled points for better performance")
+            
+            # Cache the sampled data
             cache_start = time.time()
             cache_data(merged_df, target_hour)
             cache_time = time.time() - cache_start
