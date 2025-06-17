@@ -77,7 +77,7 @@ def decompress_data(compressed_data):
 
 def get_cache_key(timestamp):
     """Generate a cache key for the current hour's data."""
-    return f"heatmap:{timestamp}"
+    return f"heatmap_sampled:{timestamp}"
 
 def get_cached_data(timestamp):
     """Try to get data from Redis cache."""
@@ -99,6 +99,10 @@ def cache_data(data, timestamp):
         return
         
     try:
+        # Sample the data before caching
+        if len(data) > 10000:
+            data = data.sample(n=10000, random_state=42)
+            
         cache_key = get_cache_key(timestamp)
         compressed_data = compress_data(data)
         
@@ -153,13 +157,6 @@ def create_map(data):
         icon=folium.Icon(color='blue', icon='info-sign')
     ).add_to(m)
     
-    # Optimize: Sample data if too many points
-    if len(data) > 10000:
-        # Sample data while preserving distribution
-        data = data.sample(n=10000, random_state=42)
-        st.info(f"📊 Note: Map shows 10,000 sampled points for better performance")
-    
-    # Optimize: Batch points using FeatureGroup
     points_start = time.time()
     fg = folium.FeatureGroup(name='Journey Times')
     
@@ -308,7 +305,7 @@ def load_latest_results():
             
             gcs_time = time.time() - gcs_start
             
-            # Cache the merged data
+            # Cache the merged data (will be sampled inside cache_data)
             cache_start = time.time()
             cache_data(merged_df, target_hour)
             cache_time = time.time() - cache_start
