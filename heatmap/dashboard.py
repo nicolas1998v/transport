@@ -99,10 +99,6 @@ def cache_data(data, timestamp):
         return
         
     try:
-        # Sample the data before caching
-        if len(data) > 10000:
-            data = data.sample(n=10000, random_state=42)
-            
         cache_key = get_cache_key(timestamp)
         compressed_data = compress_data(data)
         
