@@ -307,8 +307,8 @@ def load_latest_results():
             
             # Sample the data before caching and returning
             if len(merged_df) > 10000:
-                # Sample 13,000 points to ensure we get enough valid ones
-                sampled_df = merged_df.sample(n=13000, random_state=42)
+                # Sample 16,000 points to ensure we get enough valid ones
+                sampled_df = merged_df.sample(n=16000, random_state=42)
                 # Filter for valid points (where duration is not None and coordinates exist)
                 valid_points = sampled_df[
                     (sampled_df['duration'].notna()) & 
