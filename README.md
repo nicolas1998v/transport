@@ -105,33 +105,10 @@ This dashboard analyzes and visualizes prediction errors for London Underground 
 
 - **Live Data:** Fetches and updates data from the TfL API every 33 seconds.
 - **BigQuery Integration:** Stores and queries large volumes of prediction data efficiently.
+- **Redis Caching:** Implements efficient server-side caching with automatic expiration for faster data retrieval and reduced costs.
 - **Interactive Visualizations:** Explore prediction errors, accuracy by line, time, location, and more.
 - **Correlation & Error Analysis:** Understand how prediction errors relate to time to station and other factors.
 - **Event & Weather Impact:** Analyze how external factors affect prediction accuracy.
-
-## Cost Optimization
-
-The system is optimized for cost efficiency:
-
-### Data Collection (Cloud Function)
-- Processes data in 1 hour 40 minute windows to capture even very late train journeys
-- Reduces BigQuery costs by limiting data scans
-- Daily processing cost: ~$0.12 to $0.25
-- Monthly cost: ~$3.60 to $7.50
-- Yearly cost: ~$43.20 to $90.00
-
-### Dashboard (Streamlit)
-- Uses Redis caching to store query results for 1 hour
-- Dashboard refreshes every hour, 24 hours per day
-- Processes 10-15 queries per refresh (240-360 queries daily)
-- Daily dashboard cost: ~$0.02 to $0.03
-- Monthly dashboard cost: ~$0.60 to $0.90
-- Yearly dashboard cost: ~$7.20 to $10.80
-
-Total System Cost:
-- Daily: ~$0.13 to $0.27
-- Monthly: ~$3.90 to $8.10
-- Yearly: ~$46.80 to $97.20
 
 ## Dashboard Tabs
 
