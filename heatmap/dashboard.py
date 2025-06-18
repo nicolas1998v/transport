@@ -304,7 +304,7 @@ def load_latest_results():
             # Sample the data before caching and returning
             if len(merged_df) > 10000:
                 # Sample 16,000 points to ensure we get enough valid ones
-                sampled_df = merged_df.sample(n=16000, random_state=42)
+                sampled_df = merged_df.sample(n=17000, random_state=42)
                 # Filter for valid points (where duration is not None and coordinates exist)
                 valid_points = sampled_df[
                     (sampled_df['duration'].notna()) & 
@@ -312,7 +312,7 @@ def load_latest_results():
                     (sampled_df['Longitude'].notna())
                 ]
                 # Take first 10,000 valid points
-                merged_df = valid_points.head(10000)
+                merged_df = valid_points.head(13000)
                 st.info(f"📊 Note: Map shows 10,000 points sampled from {total_processed:,} total postcodes")
             
             # Cache the sampled data
@@ -358,6 +358,7 @@ if results:
 if results is not None:
     data = pd.DataFrame(results['data'])
     filtered_df = filter_anomalies(data)
+    filtered_df = filtered_df.head(10000)
     
     map_start = time.time()
     m = create_map(filtered_df)
