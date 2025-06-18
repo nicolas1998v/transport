@@ -176,16 +176,10 @@ def create_map(data):
         ).add_to(fg)
     
     fg.add_to(m)
-    points_time = time.time() - points_start
     
     # Add color scale
     colormap.add_to(m)
-    
-    total_time = time.time() - map_start
-    st.info(f"🗺️ Map creation metrics:\n"
-           f"- Adding {len(data):,} points: {points_time:.2f} seconds\n"
-           f"- Total map creation time: {total_time:.2f} seconds")
-    
+        
     return m
 
 def filter_anomalies(df, threshold=0.3, min_neighbors=12):
@@ -242,7 +236,6 @@ def load_latest_results():
         cached_data = get_cached_data(target_hour)
         
         if cached_data is not None:
-            st.info("✅ Data loaded from cache")
             return {
                 'data': cached_data,
                 'timestamp': target_hour,
