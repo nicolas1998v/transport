@@ -233,19 +233,16 @@ def filter_anomalies(df, threshold=0.3, min_neighbors=12):
 @st.cache_data(ttl=3600)
 def load_latest_results():
     """Load the most recent journey times results from both batches"""
-    start_time = time.time()
     try:
         # Get current time and subtract 1 hour
         current_time = datetime.now() + timedelta(hours=1)
         target_hour = (current_time - timedelta(hours=1)).strftime('%Y%m%d_%H')
         
         # Try to get data from Redis cache first
-        cache_start = time.time()
         cached_data = get_cached_data(target_hour)
-        cache_time = time.time() - cache_start
         
         if cached_data is not None:
-            st.info(f"✅ Data loaded from cache in {cache_time:.2f} seconds")
+            st.info("✅ Data loaded from cache")
             return {
                 'data': cached_data,
                 'timestamp': target_hour,
@@ -255,7 +252,6 @@ def load_latest_results():
         
         with st.spinner('Loading journey time data...'):
             # List all result files
-            gcs_start = time.time()
             blobs = list(bucket.list_blobs(prefix='results/journey_times_'))
             if not blobs:
                 return None
@@ -299,23 +295,10 @@ def load_latest_results():
                                right_on='Postcode', 
                                how='inner')
             
-            gcs_time = time.time() - gcs_start
-            
-            # Sample the data before caching and returning
-            if len(merged_df) > 10000:
-                # Sample 16,000 points to ensure we get enough valid ones
-                merged_df = merged_df.sample(n=14000, random_state=42)
+            merged_df = merged_df.sample(n=14000, random_state=42)
             
             # Cache the sampled data
-            cache_start = time.time()
             cache_data(merged_df, target_hour)
-            cache_time = time.time() - cache_start
-            
-            total_time = time.time() - start_time
-            st.info(f"⏱️ Performance metrics:\n"
-                   f"- GCS data loading: {gcs_time:.2f} seconds\n"
-                   f"- Caching data: {cache_time:.2f} seconds\n"
-                   f"- Total loading time: {total_time:.2f} seconds")
             
             return {
                 'data': merged_df,
@@ -349,26 +332,18 @@ if results:
 if results is not None:
     data = pd.DataFrame(results['data'])
     filtered_df = filter_anomalies(data)
+    valid_points = len(filtered_df)
     filtered_df = filtered_df.head(10000)
     
-    map_start = time.time()
     m = create_map(filtered_df)
-    map_time = time.time() - map_start
     
     st.subheader('Journey Time Heatmap')
     st.caption(f"Showing {len(filtered_df):,} points out of {len(data):,} total valid postcodes")
     
-    display_start = time.time()
     folium_static(m)
-    display_time = time.time() - display_start
-    
-    st.info(f"📊 Display metrics:\n"
-           f"- Map rendering time: {display_time:.2f} seconds\n"
-           f"- Total visualization time: {map_time + display_time:.2f} seconds")
     
     # Show filtering stats
     total_points = len(data)
-    valid_points = len(filtered_df)
     st.write(
         f"Filtered {total_points - valid_points:,} anomalous points "
         f"({((total_points - valid_points)/total_points)*100:.1f}%) "
