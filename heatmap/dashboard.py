@@ -307,17 +307,13 @@ def load_latest_results():
             
             # Sample the data before caching and returning
             if len(merged_df) > 10000:
-                # Debug: Print columns and first row
-                st.write("Debug - DataFrame columns:", merged_df.columns.tolist())
-                st.write("Debug - First row:", merged_df.iloc[0].to_dict())
-                
                 # Sample 13,000 points to ensure we get enough valid ones
                 sampled_df = merged_df.sample(n=13000, random_state=42)
-                # Filter for valid points (where journey_times is not None and coordinates exist)
+                # Filter for valid points (where duration is not None and coordinates exist)
                 valid_points = sampled_df[
-                    (sampled_df['journey_times'].notna()) & 
-                    (sampled_df['latitude'].notna()) & 
-                    (sampled_df['longitude'].notna())
+                    (sampled_df['duration'].notna()) & 
+                    (sampled_df['Latitude'].notna()) & 
+                    (sampled_df['Longitude'].notna())
                 ]
                 # Take first 10,000 valid points
                 merged_df = valid_points.head(10000)
