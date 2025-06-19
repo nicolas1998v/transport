@@ -134,6 +134,32 @@ SELECT
     (SELECT COUNT(*) FROM `nico-playground-384514.transport_predictions.initial_errors`) +
     (SELECT COUNT(*) FROM `nico-playground-384514.transport_predictions.any_errors`) as total_count
 """
+
+# Add cache debugging (hidden from users)
+cache_key = get_cache_key(count_query)
+cache_status = "❌ Redis not connected"
+cache_ttl = "N/A"
+
+if redis_client is not None:
+    try:
+        cached_result = redis_client.get(cache_key)
+        if cached_result is not None:
+            cache_status = "✅ Cached (Redis hit)"
+            cache_ttl = redis_client.ttl(cache_key)
+            if cache_ttl == -1:
+                cache_ttl = "No expiry"
+            else:
+                cache_ttl = f"{cache_ttl} seconds remaining"
+        else:
+            cache_status = "🔄 Not cached (Redis miss)"
+            cache_ttl = "N/A"
+    except Exception as e:
+        cache_status = f"❌ Redis error: {str(e)}"
+        cache_ttl = "N/A"
+
+# Log cache status for debugging (only visible in logs, not to users)
+print(f"Cache status: {cache_status} | TTL: {cache_ttl}")
+
 count_df = get_cached_query(count_query)
 total_count = count_df['total_count'].iloc[0]
 
