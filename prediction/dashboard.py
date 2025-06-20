@@ -99,34 +99,34 @@ def decompress_data(compressed_data):
 
 def get_cached_query(query):
     """Try Redis first, fall back to direct query if Redis fails."""
-    try:
-        cache_key = get_cache_key(query)
+    # try:
+    #     cache_key = get_cache_key(query)
         
-        # Try Redis first
-        if redis_client is not None:
-            try:
-                cached_result = redis_client.get(cache_key)
-                if cached_result is not None:
-                    return decompress_data(cached_result)
-            except Exception as e:
-                st.warning(f"Redis error: {str(e)}")
+    #     # Try Redis first
+    #     if redis_client is not None:
+    #         try:
+    #             cached_result = redis_client.get(cache_key)
+    #             if cached_result is not None:
+    #                 return decompress_data(cached_result)
+    #         except Exception as e:
+    #             st.warning(f"Redis error: {str(e)}")
         
         # If Redis fails or no cache hit, execute query
-        result = client.query(query).to_dataframe()
+    result = client.query(query).to_dataframe()
         
-        # Try to cache in Redis for next time
-        if redis_client is not None:
-            try:
-                compressed_data = compress_data(result)   
-                redis_client.setex(cache_key, 43200, compressed_data)  # 12 hours
-            except Exception as e:
-                st.warning(f"Redis error: {str(e)}")
+        # # Try to cache in Redis for next time
+        # if redis_client is not None:
+        #     try:
+        #         compressed_data = compress_data(result)   
+        #         redis_client.setex(cache_key, 43200, compressed_data)  # 12 hours
+        #     except Exception as e:
+        #         st.warning(f"Redis error: {str(e)}")
         
-        return result
+    return result
         
-    except Exception as e:
-        st.error(f"Error executing query: {str(e)}")
-        raise
+    # except Exception as e:
+    #     st.error(f"Error executing query: {str(e)}")
+    #     raise
 
 # Get counts from both tables
 count_query = """
