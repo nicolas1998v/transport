@@ -65,15 +65,30 @@ except Exception as e:
 
 def compress_data(data):
     """Compress data before storing in Redis."""
-    json_str = data.to_json(orient='records', date_format='iso')
-    compressed = zlib.compress(json_str.encode())
+    # Convert to more compact format - only essential columns
+    compressed_df = data[['postcode', 'duration', 'Latitude', 'Longitude']].copy()
+    
+    # Round duration to nearest minute to reduce precision
+    compressed_df['duration'] = compressed_df['duration'].round(0).astype(int)
+    
+    # Round coordinates to 4 decimal places (still very precise)
+    compressed_df['Latitude'] = compressed_df['Latitude'].round(4)
+    compressed_df['Longitude'] = compressed_df['Longitude'].round(4)
+    
+    json_str = compressed_df.to_json(orient='records', date_format='iso')
+    compressed = zlib.compress(json_str.encode(), level=9)  # Maximum compression
     return base64.b64encode(compressed).decode()
 
 def decompress_data(compressed_data):
     """Decompress data retrieved from Redis."""
     decoded = base64.b64decode(compressed_data)
     decompressed = zlib.decompress(decoded)
-    return pd.read_json(StringIO(decompressed.decode()))
+    df = pd.read_json(StringIO(decompressed.decode()))
+    
+    # Convert duration back to float for compatibility
+    df['duration'] = df['duration'].astype(float)
+    
+    return df
 
 def get_cache_key(timestamp):
     """Generate a cache key for the current hour's data."""
@@ -104,7 +119,7 @@ def cache_data(data, timestamp):
         
         # Calculate seconds until next hour
         current_time = datetime.now() + timedelta(hours=1)  # Add 1 hour to match VM time
-        next_hour = current_time.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+        next_hour = current_time.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)  # Back to 1 hour for live updates
         seconds_until_next_hour = int((next_hour - current_time).total_seconds())
         
         # Cache until next hour
@@ -288,7 +303,7 @@ def load_latest_results():
                                right_on='Postcode', 
                                how='inner')
             
-            merged_df = merged_df.sample(n=14000, random_state=42)
+            merged_df = merged_df.sample(n=13000, random_state=42)  # Back to 14000 to get 10k valid rows
             
             # Cache the sampled data
             cache_data(merged_df, target_hour)

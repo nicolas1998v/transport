@@ -98,6 +98,7 @@ def process_line_predictions(predictions, current_time, client):
                 SELECT time_to_station, arrival_timestamp, initial_prediction_timestamp, timestamp
                 FROM `nico-playground-384514.transport_predictions.prediction_history`
                 WHERE train_id = '{train_id}'
+                AND timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 1 MINUTE)  # Only scan last minute
                 ORDER BY timestamp DESC
                 LIMIT 1
                 """

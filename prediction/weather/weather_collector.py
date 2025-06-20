@@ -15,23 +15,6 @@ WEATHER_API_KEY = os.getenv('WEATHER_API_KEY')  # Must be set in Cloud Function
 LONDON_LAT = 51.5074
 LONDON_LON = -0.1278
 
-def check_last_collection():
-    """Check when we last collected weather data."""
-    query = """
-    SELECT MAX(timestamp) as last_collection
-    FROM `nico-playground-384514.transport_predictions.weather_data`
-    """
-    try:
-        query_job = client.query(query)
-        result = next(query_job.result())
-        if result.last_collection is not None:
-            time_since_last = datetime.now() - result.last_collection
-            return result.last_collection
-            return None
-    except Exception as e:
-        print(f"Error checking last collection: {e}")
-        return None
-
 def create_weather_table():
     """Create the weather data table if it doesn't exist."""
     schema = [
@@ -114,35 +97,24 @@ def store_weather_data(weather_data):
     table_id = "nico-playground-384514.transport_predictions.weather_data"
     
     try:
-        # Check if we already have data for this hour
-        query = f"""
-        SELECT COUNT(*) as count
-        FROM `{table_id}`
-        WHERE timestamp = TIMESTAMP('{weather_data['timestamp'].isoformat()}')
+        # Insert directly - BigQuery will handle duplicates if any
+        insert_query = f"""
+        INSERT INTO `{table_id}` (
+            timestamp, temperature, humidity, wind_speed, 
+            weather_condition, precipitation, cloud_coverage
+        ) VALUES (
+            TIMESTAMP('{weather_data['timestamp'].isoformat()}'),
+            {weather_data['temperature']},
+            {weather_data['humidity']},
+            {weather_data['wind_speed']},
+            '{weather_data['weather_condition']}',
+            {weather_data['precipitation']},
+            {weather_data['cloud_coverage']}
+        )
         """
         
-        query_job = client.query(query)
-        result = next(query_job.result())
-        
-        # Only insert if we don't have data for this hour
-        if result.count == 0:
-            # Insert directly using SQL
-            insert_query = f"""
-            INSERT INTO `{table_id}` (
-                timestamp, temperature, humidity, wind_speed, 
-                weather_condition, precipitation, cloud_coverage
-            ) VALUES (
-                TIMESTAMP('{weather_data['timestamp'].isoformat()}'),
-                {weather_data['temperature']},
-                {weather_data['humidity']},
-                {weather_data['wind_speed']},
-                '{weather_data['weather_condition']}',
-                {weather_data['precipitation']},
-                {weather_data['cloud_coverage']}
-            )
-            """
-            
-            client.query(insert_query).result()
+        client.query(insert_query).result()
+        print(f"Weather data inserted for {weather_data['timestamp']}")
             
     except Exception as e:
         print(f"Error storing weather data: {e}")
@@ -152,14 +124,6 @@ def main():
     """Main function to collect weather data."""
     # Create table if it doesn't exist
     create_weather_table()
-    
-    # Check last collection time
-    last_collection = check_last_collection()
-    if last_collection:
-        time_since_last = datetime.now() - last_collection
-        if time_since_last < timedelta(minutes=55):  # Don't collect if less than 55 minutes since last collection
-            print(f"Skipping collection - too soon since last collection ({time_since_last})")
-            return
     
     # Get and store weather data
     weather_data = get_weather_data()
