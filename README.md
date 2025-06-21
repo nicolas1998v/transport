@@ -55,13 +55,6 @@ This Streamlit dashboard visualizes journey times from the Houses of Parliament 
 - **Statistics:** Displays summary statistics (mean, median, 95th percentile) for journey times.
 - **Batch Processing:** Combines results from multiple data batches for each update.
 
-## How It Works
-
-1. **Data Loading:** Loads the latest journey time results from Google Cloud Storage, merging them with the filtered postcode dataset.
-2. **Anomaly Filtering:** The KNN-based filter removes outlier points.
-3. **Visualization:** The filtered data is plotted on a Folium map, with color indicating journey duration.
-4. **Statistics:** Key metrics are displayed alongside the map.
-
 ---
 
 # [Prediction Error Dashboard](https://kingscrossdashboard.streamlit.app/)
