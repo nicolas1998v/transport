@@ -578,7 +578,6 @@ with tab1:
                 x='error_seconds',
                 y='time_to_station',
                 color_discrete_sequence=['lightgray'],  # Use a single color for all other trains
-                trendline="ols",
                 title=f"Prediction Error vs Time to Station - {selected_line.title()} Line",
                 labels={
                     'error_seconds': 'Prediction Error (seconds)',
