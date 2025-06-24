@@ -655,7 +655,6 @@ with tab1:
             x='error_seconds',
             y='time_to_station',
             color='line',
-            trendline="ols",
                 title="Prediction Error vs Time to Station (Inbound)",
             labels={
                 'arrival_timestamp': 'Arrival Time',
@@ -698,7 +697,6 @@ with tab1:
                 x='error_seconds',
                 y='time_to_station',
                 color='line',
-                trendline="ols",
                 title="Prediction Error vs Time to Station (Outbound)",
                 labels={
                 'arrival_timestamp': 'Arrival Time',
@@ -1030,7 +1028,6 @@ with tab2:
             x='error_seconds',
             y='time_to_station',
             color='line',
-            trendline="ols",
                 title="Initial Prediction Error vs Time to Station (Inbound)",
             labels={
                 'error_seconds': 'Prediction Error (seconds)',
