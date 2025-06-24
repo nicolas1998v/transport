@@ -97,22 +97,37 @@ def decompress_data(compressed_data):
     decompressed = zlib.decompress(decoded)
     return pd.read_json(StringIO(decompressed.decode()))
 
+# Global cache to store data in memory
+_memory_cache = {}
+
 def get_cached_query(query):
-    """Try Redis first, fall back to direct query if Redis fails."""
+    """Try memory cache first, then Redis, then BigQuery."""
     try:
         cache_key = get_cache_key(query)
         
-        # Try Redis first
+        # Check memory cache first (no network calls)
+        if cache_key in _memory_cache:
+            return _memory_cache[cache_key]
+        
+        # Check if data exists in Redis (tiny network call)
         if redis_client is not None:
             try:
-                cached_result = redis_client.get(cache_key)
-                if cached_result is not None:
-                    return decompress_data(cached_result)
+                if redis_client.exists(cache_key):
+                    # Download from Redis only once
+                    cached_result = redis_client.get(cache_key)
+                    if cached_result is not None:
+                        data = decompress_data(cached_result)
+                        # Store in memory cache for future use
+                        _memory_cache[cache_key] = data
+                        return data
             except Exception as e:
                 st.warning(f"Redis error: {str(e)}")
         
-        # If Redis fails or no cache hit, execute query
+        # If no cache hit, execute query
         result = client.query(query).to_dataframe()
+        
+        # Store in memory cache
+        _memory_cache[cache_key] = result
         
         # Try to cache in Redis for next time
         if redis_client is not None:
