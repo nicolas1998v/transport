@@ -118,7 +118,7 @@ def get_cached_query(query):
         if redis_client is not None:
             try:
                 compressed_data = compress_data(result)   
-                redis_client.setex(cache_key, 43200, compressed_data)  # 12 hours
+                redis_client.setex(cache_key, 345600, compressed_data)  # 4 days
             except Exception as e:
                 st.warning(f"Redis error: {str(e)}")
         
@@ -163,7 +163,7 @@ print(f"Cache status: {cache_status} | TTL: {cache_ttl}")
 count_df = get_cached_query(count_query)
 total_count = count_df['total_count'].iloc[0]
 
-st.info(f"Data is cached and updates every 12 hours | Total observations: {total_count:,}")
+st.info(f"Data is cached and updates every 4 days | Total observations: {total_count:,}")
 st.title("Kings Cross Tube Prediction Analysis")
 
 # Create tabs
