@@ -10,6 +10,27 @@ from io import StringIO
 import zlib
 import base64
 
+# Debug info for trendlines
+try:
+    import statsmodels
+    st.sidebar.success(f"✅ statsmodels: {statsmodels.__version__}")
+except ImportError as e:
+    st.sidebar.error(f"❌ statsmodels: {e}")
+
+try:
+    import plotly
+    st.sidebar.success(f"✅ plotly: {plotly.__version__}")
+except ImportError as e:
+    st.sidebar.error(f"❌ plotly: {e}")
+
+# Test trendline functionality
+try:
+    test_df = pd.DataFrame({'x': [1,2,3], 'y': [1,2,3]})
+    test_fig = px.scatter(test_df, x='x', y='y', trendline="ols")
+    st.sidebar.success("✅ Trendlines work!")
+except Exception as e:
+    st.sidebar.error(f"❌ Trendlines fail: {e}")
+
 st.set_page_config(layout="wide")
 
 # Initialize GCP client with credentials from Streamlit secrets
@@ -655,7 +676,7 @@ with tab1:
             x='error_seconds',
             y='time_to_station',
             color='line',
-            trendline="ols",
+            
                 title="Prediction Error vs Time to Station (Inbound)",
             labels={
                 'arrival_timestamp': 'Arrival Time',
@@ -698,7 +719,7 @@ with tab1:
                 x='error_seconds',
                 y='time_to_station',
                 color='line',
-                trendline="ols",
+                
                 title="Prediction Error vs Time to Station (Outbound)",
                 labels={
                 'arrival_timestamp': 'Arrival Time',
@@ -1030,7 +1051,7 @@ with tab2:
             x='error_seconds',
             y='time_to_station',
             color='line',
-                trendline="ols",
+                
                 title="Initial Prediction Error vs Time to Station (Inbound)",
             labels={
                 'error_seconds': 'Prediction Error (seconds)',
@@ -1192,7 +1213,7 @@ with tab2:
                 x='error_seconds',
                 y='time_to_station',
                 color='line',
-                trendline="ols",
+                
                 title="Initial Prediction Error vs Time to Station (Outbound)",
                 labels={
                     'error_seconds': 'Prediction Error (seconds)',
