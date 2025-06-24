@@ -418,7 +418,7 @@ LINE_COLORS = {
 
 with tab1:
     st.markdown("""      
-        Welcome to my dashboard!! Let's imagine you are on the platform at King's Cross and you're wondering when your train is coming, so you check the arrival screens.  
+        Welcome to my dashboard! Let's imagine you are on the platform at King's Cross and you're wondering when your train is coming, so you check the arrival screens.  
         Now imagine you have a bigger screen which shows the same predictions, but for every tube line arriving at King's Cross, and for trains as far as 20 minutes away.
                     
         And you wonder... just how accurate are these predictions? If we establish accuracy as being the percentage of predictions that are within the arrival time and a window of +-/30s or +-/60s, what variables affect the accuracy?
@@ -655,6 +655,7 @@ with tab1:
             x='error_seconds',
             y='time_to_station',
             color='line',
+            trendline="ols",
                 title="Prediction Error vs Time to Station (Inbound)",
             labels={
                 'arrival_timestamp': 'Arrival Time',
@@ -697,6 +698,7 @@ with tab1:
                 x='error_seconds',
                 y='time_to_station',
                 color='line',
+                trendline="ols",
                 title="Prediction Error vs Time to Station (Outbound)",
                 labels={
                 'arrival_timestamp': 'Arrival Time',
@@ -1028,6 +1030,7 @@ with tab2:
             x='error_seconds',
             y='time_to_station',
             color='line',
+                trendline="ols",
                 title="Initial Prediction Error vs Time to Station (Inbound)",
             labels={
                 'error_seconds': 'Prediction Error (seconds)',
@@ -1189,6 +1192,7 @@ with tab2:
                 x='error_seconds',
                 y='time_to_station',
                 color='line',
+                trendline="ols",
                 title="Initial Prediction Error vs Time to Station (Outbound)",
                 labels={
                     'error_seconds': 'Prediction Error (seconds)',
