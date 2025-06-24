@@ -107,12 +107,15 @@ def get_cached_query(query):
         
         # Check memory cache first (no network calls)
         if cache_key in _memory_cache:
+            st.write(f"Debug: Memory cache hit for {cache_key}")
             return _memory_cache[cache_key]
         
         # Check if data exists in Redis (tiny network call)
         if redis_client is not None:
             try:
+                st.write(f"Debug: Checking Redis for {cache_key}")
                 if redis_client.exists(cache_key):
+                    st.write(f"Debug: Redis cache hit for {cache_key}")
                     # Download from Redis only once
                     cached_result = redis_client.get(cache_key)
                     if cached_result is not None:
@@ -120,10 +123,14 @@ def get_cached_query(query):
                         # Store in memory cache for future use
                         _memory_cache[cache_key] = data
                         return data
+                else:
+                    st.write(f"Debug: Redis cache miss for {cache_key}")
             except Exception as e:
+                st.write(f"Debug: Redis error: {e}")
                 st.warning(f"Redis error: {str(e)}")
         
         # If no cache hit, execute query
+        st.write(f"Debug: Executing BigQuery for {cache_key}")
         result = client.query(query).to_dataframe()
         
         # Store in memory cache
@@ -134,7 +141,9 @@ def get_cached_query(query):
             try:
                 compressed_data = compress_data(result)   
                 redis_client.setex(cache_key, 345600, compressed_data)  # 4 days
+                st.write(f"Debug: Cached in Redis for {cache_key}")
             except Exception as e:
+                st.write(f"Debug: Redis caching error: {e}")
                 st.warning(f"Redis error: {str(e)}")
         
         return result
@@ -525,6 +534,16 @@ with tab1:
 
     df = get_cached_query(run_query)
     df_any_prediction = get_cached_query(any_prediction_query)
+
+    # Debug info
+    st.write(f"Debug: df shape = {df.shape if not df.empty else 'Empty'}")
+    st.write(f"Debug: df_any_prediction shape = {df_any_prediction.shape if not df_any_prediction.empty else 'Empty'}")
+    st.write(f"Debug: Redis connected = {redis_client is not None}")
+    if redis_client is not None:
+        try:
+            st.write(f"Debug: Redis ping = {redis_client.ping()}")
+        except:
+            st.write("Debug: Redis ping failed")
 
     if not df.empty:
         # Add train_id filter
