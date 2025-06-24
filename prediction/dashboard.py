@@ -578,6 +578,7 @@ with tab1:
                 x='error_seconds',
                 y='time_to_station',
                 color_discrete_sequence=['lightgray'],  # Use a single color for all other trains
+                trendline="ols",
                 title=f"Prediction Error vs Time to Station - {selected_line.title()} Line",
                 labels={
                     'error_seconds': 'Prediction Error (seconds)',
@@ -655,6 +656,7 @@ with tab1:
             x='error_seconds',
             y='time_to_station',
             color='line',
+            trendline="ols",
                 title="Prediction Error vs Time to Station (Inbound)",
             labels={
                 'arrival_timestamp': 'Arrival Time',
@@ -697,6 +699,7 @@ with tab1:
                 x='error_seconds',
                 y='time_to_station',
                 color='line',
+                trendline="ols",
                 title="Prediction Error vs Time to Station (Outbound)",
                 labels={
                 'arrival_timestamp': 'Arrival Time',
@@ -1028,6 +1031,7 @@ with tab2:
             x='error_seconds',
             y='time_to_station',
             color='line',
+            trendline="ols",
                 title="Initial Prediction Error vs Time to Station (Inbound)",
             labels={
                 'error_seconds': 'Prediction Error (seconds)',
@@ -1189,6 +1193,7 @@ with tab2:
                 x='error_seconds',
                 y='time_to_station',
                 color='line',
+                trendline="ols",
                 title="Initial Prediction Error vs Time to Station (Outbound)",
                 labels={
                     'error_seconds': 'Prediction Error (seconds)',
