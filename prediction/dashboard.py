@@ -3160,4 +3160,3 @@ with tab13:
             f"{worst_sequence['prev_line']} → {worst_sequence['line']}",
             f"{worst_sequence['accuracy_percentage']:.1f}% accuracy"
         )
-
