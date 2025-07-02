@@ -109,6 +109,7 @@ def fetch_venue_events(venue_id, venue_name):
     
     # Now fetch music events
     params['segmentId'] = 'KZFzniwnSyZfZ7v7nJ'  # Music segment
+    page = 0  # Reset page counter for music events
     print(f"Searching for music events from {start_str} to {end_str}")
     
     while True:
@@ -189,18 +190,19 @@ def process_events(events, venue_name):
                     if 'max' in price_range:
                         expected_attendance = max(expected_attendance or 0, price_range['max'])
             
-                processed_events.append({
-                    'event_id': event['id'],
+            # Add event to processed events (moved outside the priceRanges check)
+            processed_events.append({
+                'event_id': event['id'],
                 'event_name': event['name'],
-                    'event_date': event_date,
-                    'expected_attendance': expected_attendance,
-                    'venue_name': venue_name,
+                'event_date': event_date,
+                'expected_attendance': expected_attendance,
+                'venue_name': venue_name,
                 'venue_address': venue.get('address', {}).get('line1', ''),
-                    'event_url': event['url'],
+                'event_url': event['url'],
                 'event_type': event_type,
                 'genres': ','.join(genres),
-                    'last_updated': datetime.now()
-                })
+                'last_updated': datetime.now()
+            })
             
             # Update last event time and venue
             last_event_time = event_date
@@ -235,21 +237,73 @@ def update_bigquery(events):
         bigquery.SchemaField("last_updated", "TIMESTAMP")
     ]
     
-    # Create or update table
-    job_config = bigquery.LoadJobConfig(
-        schema=schema,
-        write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE
-    )
-    
-    job = client.load_table_from_dataframe(
-        df, table_id, job_config=job_config
-    )
-    job.result()  # Wait for the job to complete
-    
-    print(f"Loaded {len(df)} events into {table_id}")
+    try:
+        # Try the DataFrame method first (requires pyarrow)
+        job_config = bigquery.LoadJobConfig(
+            schema=schema,
+            write_disposition=bigquery.WriteDisposition.WRITE_APPEND
+        )
+        
+        job = client.load_table_from_dataframe(
+            df, table_id, job_config=job_config
+        )
+        job.result()  # Wait for the job to complete
+        
+        print(f"Loaded {len(df)} events into {table_id}")
+        
+    except Exception as e:
+        print(f"DataFrame method failed: {str(e)}")
+        print("Falling back to JSON method...")
+        
+        # Fallback: Convert to JSON and use insert_rows method
+        # First, get existing event IDs to avoid duplicates
+        existing_events_query = f"SELECT event_id FROM `{table_id}`"
+        try:
+            existing_events_df = client.query(existing_events_query).to_dataframe()
+            existing_event_ids = set(existing_events_df['event_id'].astype(str))
+            print(f"Found {len(existing_event_ids)} existing events")
+        except Exception as e:
+            print(f"Could not check existing events: {str(e)}")
+            existing_event_ids = set()
+        
+        rows_to_insert = []
+        new_events_count = 0
+        for _, row in df.iterrows():
+            event_id = str(row['event_id'])
+            if event_id not in existing_event_ids:
+                rows_to_insert.append({
+                    'event_id': event_id,
+                    'event_name': str(row['event_name']),
+                    'event_date': row['event_date'].isoformat(),
+                    'expected_attendance': row['expected_attendance'] if pd.notna(row['expected_attendance']) else None,
+                    'venue_name': str(row['venue_name']),
+                    'venue_address': str(row['venue_address']),
+                    'event_url': str(row['event_url']),
+                    'event_type': str(row['event_type']),
+                    'genres': str(row['genres']),
+                    'last_updated': row['last_updated'].isoformat()
+                })
+                new_events_count += 1
+            else:
+                print(f"Skipping duplicate event: {event_id}")
+        
+        print(f"Adding {new_events_count} new events (skipped {len(df) - new_events_count} duplicates)")
+        
+        # Create table with schema (don't delete existing data)
+        table = bigquery.Table(table_id, schema=schema)
+        table = client.create_table(table, exists_ok=True)
+        
+        # Insert rows
+        errors = client.insert_rows_json(table, rows_to_insert)
+        if errors:
+            print(f"Errors inserting rows: {errors}")
+        else:
+            print(f"Successfully loaded {len(rows_to_insert)} events into {table_id}")
 
 def main():
     """Main function to fetch and update event data."""
+    print(f"Starting event fetch at {datetime.now()}")
+    
     if not TICKETMASTER_API_KEY:
         print("Error: TICKETMASTER_API_KEY environment variable not set")
         return
@@ -258,22 +312,34 @@ def main():
     
     # Fetch events for each venue
     for venue_name, venue_id in MAJOR_VENUES.items():
-        print(f"\nFetching events for {venue_name}...")
-        events = fetch_venue_events(venue_id, venue_name)
-        print(f"Found {len(events)} events")
+        try:
+            print(f"\nFetching events for {venue_name}...")
+            events = fetch_venue_events(venue_id, venue_name)
+            print(f"Found {len(events)} raw events")
+            
+            print(f"Processing events for {venue_name}...")
+            processed_events = process_events(events, venue_name)
+            all_events.extend(processed_events)
         
-        print(f"Processing events for {venue_name}...")
-        processed_events = process_events(events, venue_name)
-        all_events.extend(processed_events)
-    
-        print(f"Processed {len(processed_events)} events for {venue_name}")
-        time.sleep(1)  # Add delay between venues
+            print(f"Processed {len(processed_events)} events for {venue_name}")
+            time.sleep(1)  # Add delay between venues
+        except Exception as e:
+            print(f"Error processing venue {venue_name}: {str(e)}")
+            continue
     
     print(f"\nTotal events found: {len(all_events)}")
     
-    print("Updating BigQuery...")
-    update_bigquery(all_events)
+    if all_events:
+        print("Updating BigQuery...")
+        try:
+            update_bigquery(all_events)
+            print("Successfully updated BigQuery!")
+        except Exception as e:
+            print(f"Error updating BigQuery: {str(e)}")
+    else:
+        print("No events found - skipping BigQuery update")
     
+    print(f"Event fetch completed at {datetime.now()}")
     print("Done!")
 
 if __name__ == "__main__":
