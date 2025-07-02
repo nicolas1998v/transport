@@ -97,17 +97,11 @@ def decompress_data(compressed_data):
     decompressed = zlib.decompress(decoded)
     return pd.read_json(StringIO(decompressed.decode()))
 
-# Global cache to store data in memory
-_memory_cache = {}
-
+@st.cache_data(ttl=345600)  # Cache for 4 days
 def get_cached_query(query):
-    """Try memory cache first, then Redis, then BigQuery."""
+    """Try Redis first, then BigQuery. Uses Streamlit's built-in caching."""
     try:
         cache_key = get_cache_key(query)
-        
-        # Check memory cache first (no network calls)
-        if cache_key in _memory_cache:
-            return _memory_cache[cache_key]
         
         # Check if data exists in Redis (tiny network call)
         if redis_client is not None:
@@ -117,17 +111,12 @@ def get_cached_query(query):
                     cached_result = redis_client.get(cache_key)
                     if cached_result is not None:
                         data = decompress_data(cached_result)
-                        # Store in memory cache for future use
-                        _memory_cache[cache_key] = data
                         return data
             except Exception as e:
                 st.warning(f"Redis error: {str(e)}")
         
         # If no cache hit, execute query
         result = client.query(query).to_dataframe()
-        
-        # Store in memory cache
-        _memory_cache[cache_key] = result
         
         # Try to cache in Redis for next time
         if redis_client is not None:
@@ -178,7 +167,9 @@ print(f"Cache status: {cache_status} | TTL: {cache_ttl}")
 count_df = get_cached_query(count_query)
 total_count = count_df['total_count'].iloc[0]
 
+# Add cache performance monitoring
 st.info(f"Data is cached and updates every 4 days | Total observations: {total_count:,}")
+print(f"Cache Status: {cache_status} | TTL: {cache_ttl}")
 st.title("Kings Cross Tube Prediction Analysis")
 
 # Create tabs
