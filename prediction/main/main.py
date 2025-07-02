@@ -277,6 +277,7 @@ def collect_predictions(request):
                                     FROM `nico-playground-384514.transport_predictions.prediction_history`
                                     WHERE initial_prediction_timestamp = TIMESTAMP('{initial_prediction_timestamp}')
                                     AND train_id = '{train_id}'
+                                    AND timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 90 MINUTE)
                                     order by timestamp asc
                                     limit 1
                                 )
@@ -320,6 +321,7 @@ def collect_predictions(request):
                             WHERE train_id = '{train_id}'
                             and initial_prediction_timestamp =  TIMESTAMP('{initial_prediction_timestamp}')
                             AND any_prediction_timestamp IS NOT NULL
+                            AND timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 90 MINUTE)
                             ORDER BY timestamp desc
                         """
 
