@@ -12,7 +12,7 @@ This repository contains two Streamlit live dashboards analyzing London Undergro
 - **Cloud-Native Evolution:**  
   Both projects began as Google Cloud Functions but were migrated to Google Cloud VMs for cost savings.
 - **Cost Optimization:**  
-  A Google Cloud Scheduler job starts the VM in the morning and stops it at night, so the VM only runs during required hours—significantly reducing compute charges.
+  A Google Cloud Scheduler job starts the VM in the morning and stops it at night, so the VM only runs during required hours, to reduce compute charges.
 - **Service Management:**  
   Each VM uses a `systemd` service file to manage the main script, specifying the working directory, Python environment, and all necessary files. This ensures the script starts automatically on VM boot and can be easily restarted or monitored.
 - **TfL API:**  
@@ -66,7 +66,7 @@ This dashboard analyzes and visualizes prediction errors for London Underground 
 - **Understanding the Data:**  
   I first had to understand the structure and quirks of the TfL data.  
   I had to go through a long phase of data cleaning, excluding the circle line due to data quality issues, excluding some Terminus stations in which the train is on standby and still predicting, and understanding the different glitches of the API.  
-  To isolate individual train runs and remove glitches, I developed a query that checked for observations, allowing me to segment continuous data into distinct runs.
+  To isolate individual train runs and remove glitches, I developed a query that checked for previous observations, allowing me to segment continuous data into distinct runs.
 - **Data Collection:**  
   - **Initial Approach:** I started by making API requests every minute.
   - **Optimization:** To better capture arrivals and anomaly magnitudes, I switched to every 30 seconds. However, this sometimes wasn't enough to process all data when there were many lengthy arrivals, so I increased the interval to 33 seconds, which proved to be the best balance between arrival detection and processing time.
