@@ -51,6 +51,7 @@ This Streamlit dashboard visualizes journey times from the Houses of Parliament 
 
 - **Interactive Heatmap:** Visualizes journey times to every postcode in London using Folium and Streamlit.
 - **Live Data:** Loads the latest journey time results from Google Cloud Storage.
+- **Redis Caching & Data Compression:** Implements efficient server-side caching with automatic expiration and data compression to reduce rendering time and network costs.
 - **Anomaly Filtering:** Uses k-nearest neighbors to filter out anomalous journey times.
 - **Statistics:** Displays summary statistics (mean, median, 95th percentile) for journey times.
 - **Batch Processing:** Combines results from multiple data batches for each update.
