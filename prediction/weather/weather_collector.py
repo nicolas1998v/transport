@@ -98,22 +98,22 @@ def store_weather_data(weather_data):
     
     try:
         # Insert directly - BigQuery will handle duplicates if any
-            insert_query = f"""
-            INSERT INTO `{table_id}` (
-                timestamp, temperature, humidity, wind_speed, 
-                weather_condition, precipitation, cloud_coverage
-            ) VALUES (
-                TIMESTAMP('{weather_data['timestamp'].isoformat()}'),
-                {weather_data['temperature']},
-                {weather_data['humidity']},
-                {weather_data['wind_speed']},
-                '{weather_data['weather_condition']}',
-                {weather_data['precipitation']},
-                {weather_data['cloud_coverage']}
-            )
-            """
-            
-            client.query(insert_query).result()
+        insert_query = f"""
+        INSERT INTO `{table_id}` (
+            timestamp, temperature, humidity, wind_speed, 
+            weather_condition, precipitation, cloud_coverage
+        ) VALUES (
+            TIMESTAMP('{weather_data['timestamp'].isoformat()}'),
+            {weather_data['temperature']},
+            {weather_data['humidity']},
+            {weather_data['wind_speed']},
+            '{weather_data['weather_condition']}',
+            {weather_data['precipitation']},
+            {weather_data['cloud_coverage']}
+        )
+        """
+        
+        client.query(insert_query).result()
         print(f"Weather data inserted for {weather_data['timestamp']}")
             
     except Exception as e:
