@@ -42,4 +42,4 @@ Thumbs.db
 heatmap/src/London postcodes.csv
 heatmap/src/london_postcodes_filtered.csv
 
-prediction/cloud_functions/credentials.json
+prediction/cloud_functions/credentials.jsonstation_info_app/
