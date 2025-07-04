@@ -1,3 +1,5 @@
+#this file used to start and stop the Cloud Functions and the scheduler when I was using managed services instead of VM 
+
 from google.cloud import scheduler_v1
 import os
 import sys
